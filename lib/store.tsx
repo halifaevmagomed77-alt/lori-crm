@@ -3,45 +3,51 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { createSeed } from "./seed";
 import { today } from "./dates";
-import type { Client, DB, Dress, Fitting, FittingStatus, Order, OrderStatus, Role } from "./types";
+import type { Attendance, Booking, Bride, DB, DressItem, Payment, Role, Staff, Supplier, Visit } from "./types";
 
-const KEY = "lori-crm:v1";
-const ROLE_KEY = "lori-crm:role";
+const KEY = "lori-crm:v2";
+const USER_KEY = "lori-crm:user";
 
-export type Drawer = { kind: "client"; id: string } | { kind: "dress"; id: string } | null;
+/* ---------- Права ---------- */
 
-export type DialogState =
-  | { kind: "fitting"; fitting?: Fitting; clientId?: string; date?: string; time?: string }
-  | { kind: "client"; client?: Client; then?: "fitting" }
-  | { kind: "order"; type: Order["type"]; clientId?: string; dressId?: string; fittingId?: string; order?: Order }
-  | { kind: "dress"; dress?: Dress }
+export type Permission =
+  | "reports" // финансовые отчёты
+  | "suppliers" // поставщики и закупочные цены
+  | "confirmPayments" // подпись владельца под оплатой
+  | "manageStaff" // учётки сотрудников и табель
+  | "editAll" // правка чужих записей, выдача, приёмка, отказ
+  | "cleaning" // блок «Химчистка»
+  | "receiveItems"; // поступление платьев
+
+const PERMS: Record<Role, Permission[]> = {
+  owner: ["reports", "suppliers", "confirmPayments", "manageStaff", "editAll", "cleaning", "receiveItems"],
+  admin: ["manageStaff", "editAll", "cleaning"],
+  employee: [],
+};
+
+export function can(role: Role, p: Permission) {
+  return PERMS[role].includes(p);
+}
+
+/* ---------- UI-состояние ---------- */
+
+export type Sheet = { kind: "booking"; id: string } | { kind: "bride"; id: string } | { kind: "item"; id: string } | null;
+
+export type Dialog =
+  | { kind: "visit"; brideId?: string; date?: string }
+  | { kind: "booking"; brideId?: string; visitId?: string; itemId?: string; booking?: Booking }
+  | { kind: "issue"; bookingId: string }
+  | { kind: "return"; bookingId: string }
+  | { kind: "refuse"; bookingId: string }
+  | { kind: "move"; bookingId: string }
+  | { kind: "payment"; bookingId: string; paymentKind?: Payment["kind"] }
+  | { kind: "bride"; bride?: Bride }
+  | { kind: "item"; item?: DressItem }
+  | { kind: "staff"; staff?: Staff }
+  | { kind: "supplier"; supplier?: Supplier }
   | null;
 
 type Toast = { id: number; text: string };
-
-type Store = {
-  db: DB;
-  role: Role;
-  setRole: (r: Role) => void;
-  drawer: Drawer;
-  openClient: (id: string) => void;
-  openDress: (id: string) => void;
-  closeDrawer: () => void;
-  dialog: DialogState;
-  openDialog: (d: DialogState) => void;
-  closeDialog: () => void;
-  toast: (text: string) => void;
-  toasts: Toast[];
-  saveClient: (c: Omit<Client, "id" | "createdAt"> & { id?: string }) => Client;
-  saveFitting: (f: Omit<Fitting, "id"> & { id?: string }) => Fitting;
-  setFittingStatus: (id: string, status: FittingStatus) => void;
-  saveOrder: (o: Omit<Order, "id" | "createdAt" | "status"> & { id?: string; status?: OrderStatus }) => Order;
-  setOrderStatus: (id: string, status: OrderStatus) => void;
-  saveDress: (d: Omit<Dress, "id" | "createdAt"> & { id?: string }) => Dress;
-  resetDemo: () => void;
-};
-
-const Ctx = createContext<Store | null>(null);
 
 const uid = (p: string) => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -50,7 +56,7 @@ function load(): DB {
     const raw = window.localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as DB;
-      if (parsed.version === 1) return parsed;
+      if (parsed.version === 2) return parsed;
     }
   } catch {
     /* хранилище недоступно — работаем в памяти */
@@ -58,23 +64,23 @@ function load(): DB {
   return createSeed();
 }
 
-export function StoreProvider({ children }: { children: React.ReactNode }) {
+function useStoreValue() {
   const [db, setDb] = useState<DB | null>(null);
-  const [role, setRoleState] = useState<Role>("owner");
-  const [drawer, setDrawer] = useState<Drawer>(null);
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [dialog, setDialog] = useState<Dialog>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
     const data = load();
-    let r: Role = "owner";
+    let u: string | null = null;
     try {
-      if (window.localStorage.getItem(ROLE_KEY) === "admin") r = "admin";
+      u = window.localStorage.getItem(USER_KEY);
     } catch {}
     // единоразовая загрузка из localStorage после монтирования
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDb(data);
-    setRoleState(r);
+    setUserId(u && data.staff.some((s) => s.id === u && s.active) ? u : null);
   }, []);
 
   useEffect(() => {
@@ -85,88 +91,156 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [db]);
 
   const update = useCallback((fn: (d: DB) => DB) => setDb((d) => (d ? fn(d) : d)), []);
-
   const toast = useCallback((text: string) => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, text }]);
-    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
+    const tid = Date.now() + Math.random();
+    setToasts((t) => [...t, { id: tid, text }]);
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== tid)), 3200);
   }, []);
 
-  const store = useMemo<Store | null>(() => {
+  return useMemo(() => {
     if (!db) return null;
+    const user = userId ? db.staff.find((s) => s.id === userId) ?? null : null;
+    const me = user?.id ?? "";
+
+    const patchBooking = (id: string, fn: (b: Booking) => Booking) =>
+      update((d) => ({ ...d, bookings: d.bookings.map((b) => (b.id === id ? fn(b) : b)) }));
+
+    const addPayment = (p: Omit<Payment, "id" | "recordedBy" | "confirmedAt">) => {
+      const payment: Payment = { ...p, id: uid("p"), recordedBy: me, confirmedAt: user?.role === "owner" ? p.date : undefined };
+      update((d) => ({ ...d, payments: [...d.payments, payment] }));
+      return payment;
+    };
+
     return {
       db,
-      role,
-      setRole: (r) => {
-        setRoleState(r);
+      user,
+      role: (user?.role ?? "employee") as Role,
+      can: (p: Permission) => !!user && can(user.role, p),
+      login: (id: string) => {
+        setUserId(id);
         try {
-          window.localStorage.setItem(ROLE_KEY, r);
+          window.localStorage.setItem(USER_KEY, id);
         } catch {}
       },
-      drawer,
-      openClient: (id) => setDrawer({ kind: "client", id }),
-      openDress: (id) => setDrawer({ kind: "dress", id }),
-      closeDrawer: () => setDrawer(null),
+      logout: () => {
+        setUserId(null);
+        setSheet(null);
+        setDialog(null);
+        try {
+          window.localStorage.removeItem(USER_KEY);
+        } catch {}
+      },
+      sheet,
+      open: (s: Sheet) => setSheet(s),
+      closeSheet: () => setSheet(null),
       dialog,
-      openDialog: setDialog,
+      openDialog: (d: Dialog) => setDialog(d),
       closeDialog: () => setDialog(null),
-      toast,
       toasts,
-      saveClient: (input) => {
-        const existing = input.id ? db.clients.find((c) => c.id === input.id) : undefined;
-        const client: Client = existing
-          ? { ...existing, ...input, id: existing.id }
-          : { ...input, id: uid("c"), createdAt: today() };
+      toast,
+
+      saveBride: (input: Omit<Bride, "id" | "createdAt"> & { id?: string }) => {
+        // upsert внутри update: запись могла быть создана в этом же действии и ещё не попасть в db
+        const existing = input.id ? db.brides.find((b) => b.id === input.id) : undefined;
+        const bride: Bride = { createdAt: today(), ...existing, ...input, id: input.id ?? uid("b") } as Bride;
         update((d) => ({
           ...d,
-          clients: existing ? d.clients.map((c) => (c.id === client.id ? client : c)) : [...d.clients, client],
+          brides: d.brides.some((b) => b.id === bride.id) ? d.brides.map((b) => (b.id === bride.id ? { ...b, ...bride } : b)) : [...d.brides, bride],
         }));
-        return client;
+        return bride;
       },
-      saveFitting: (input) => {
-        const fitting: Fitting = { ...input, id: input.id ?? uid("f") };
+
+      /** Возвратная невеста определяется автоматически: у неё уже был визит. Встречает её закреплённый консультант. */
+      addVisit: (input: Omit<Visit, "id" | "returning" | "consultantId"> & { consultantId?: string }) => {
+        const bride = db.brides.find((b) => b.id === input.brideId);
+        const returning = db.visits.some((v) => v.brideId === input.brideId && v.date <= input.date);
+        const visit: Visit = { ...input, id: uid("v"), returning, consultantId: bride?.consultantId ?? input.consultantId ?? me };
+        update((d) => ({ ...d, visits: [...d.visits, visit].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)) }));
+        return visit;
+      },
+      updateVisit: (v: Visit) => update((d) => ({ ...d, visits: d.visits.map((x) => (x.id === v.id ? v : x)) })),
+
+      createBooking: (
+        input: Omit<Booking, "id" | "depositNo" | "status" | "log" | "createdBy" | "createdAt">,
+        depositPay: { method: Payment["method"]; bank?: string },
+      ) => {
+        const booking: Booking = { ...input, id: uid("k"), depositNo: db.nextDepositNo, status: "booked", log: [], createdBy: me, createdAt: today() };
+        update((d) => ({ ...d, bookings: [...d.bookings, booking], nextDepositNo: d.nextDepositNo + 1 }));
+        if (input.deposit > 0) addPayment({ bookingId: booking.id, kind: "deposit", amount: input.deposit, date: today(), ...depositPay });
+        return booking;
+      },
+      updateBooking: (b: Booking) => patchBooking(b.id, () => b),
+      issueBooking: (id: string, balance: number, method: Payment["method"], bank?: string) => {
+        const no = db.nextRentNo;
+        patchBooking(id, (b) => ({ ...b, status: "issued", issuedAt: today(), rentNo: no }));
+        update((d) => ({ ...d, nextRentNo: d.nextRentNo + 1 }));
+        if (balance > 0) addPayment({ bookingId: id, kind: "balance", amount: balance, date: today(), method, bank });
+        return no;
+      },
+      returnBooking: (id: string, opts: { fine?: { amount: number; reason: string; method: Payment["method"] }; cleaning: boolean }) => {
+        const b = db.bookings.find((x) => x.id === id)!;
+        patchBooking(id, (x) => ({ ...x, status: "returned", returnedAt: today() }));
+        if (opts.fine && opts.fine.amount > 0)
+          addPayment({ bookingId: id, kind: "fine", amount: opts.fine.amount, reason: opts.fine.reason, date: today(), method: opts.fine.method });
+        if (opts.cleaning) update((d) => ({ ...d, cleanings: [...d.cleanings, { id: uid("c"), itemId: b.itemId, bookingId: id, sentAt: today() }] }));
+      },
+      refuseBooking: (id: string, reason: string) =>
+        patchBooking(id, (b) => ({ ...b, status: "refused", refusedAt: today(), refuseReason: reason, log: [...b.log, { date: today(), text: `Отказ: ${reason}` }] })),
+      moveBooking: (id: string, eventDate: string, issueDate: string, returnDate: string) =>
+        patchBooking(id, (b) => ({
+          ...b,
+          eventDate,
+          issueDate,
+          returnDate,
+          log: [...b.log, { date: today(), text: `Перенос даты с ${b.eventDate} на ${eventDate}` }],
+        })),
+      addPayment,
+      confirmPayment: (id: string) =>
+        update((d) => ({ ...d, payments: d.payments.map((p) => (p.id === id ? { ...p, confirmedAt: today() } : p)) })),
+
+      sendCleaning: (itemId: string, note?: string) =>
+        update((d) => ({ ...d, cleanings: [...d.cleanings, { id: uid("c"), itemId, sentAt: today(), note }] })),
+      cleaningBack: (id: string) => update((d) => ({ ...d, cleanings: d.cleanings.map((c) => (c.id === id ? { ...c, backAt: today() } : c)) })),
+
+      saveItem: (input: Omit<DressItem, "id"> & { id?: string }) => {
+        const item: DressItem = { ...input, id: input.id ?? uid("i") };
+        update((d) => ({ ...d, items: input.id ? d.items.map((x) => (x.id === item.id ? item : x)) : [...d.items, item] }));
+        return item;
+      },
+      saveSupplier: (input: Omit<Supplier, "id"> & { id?: string }) => {
+        const s: Supplier = { ...input, id: input.id ?? uid("s") };
+        update((d) => ({ ...d, suppliers: input.id ? d.suppliers.map((x) => (x.id === s.id ? s : x)) : [...d.suppliers, s] }));
+        return s;
+      },
+      saveStaff: (input: Omit<Staff, "id"> & { id?: string }) => {
+        const s: Staff = { ...input, id: input.id ?? uid("u") };
+        update((d) => ({ ...d, staff: input.id ? d.staff.map((x) => (x.id === s.id ? s : x)) : [...d.staff, s] }));
+        return s;
+      },
+      setAttendance: (a: Omit<Attendance, "id">) =>
         update((d) => {
-          const others = d.fittings.filter((f) => f.id !== fitting.id);
-          const all = [...others, fitting].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-          return { ...d, fittings: all };
-        });
-        return fitting;
-      },
-      setFittingStatus: (id, status) =>
-        update((d) => ({ ...d, fittings: d.fittings.map((f) => (f.id === id ? { ...f, status } : f)) })),
-      saveOrder: (input) => {
-        const existing = input.id ? db.orders.find((o) => o.id === input.id) : undefined;
-        const order: Order = existing
-          ? { ...existing, ...input, id: existing.id, status: input.status ?? existing.status }
-          : { ...input, id: uid("o"), createdAt: today(), status: input.status ?? "booked" };
-        update((d) => ({
-          ...d,
-          orders: existing ? d.orders.map((o) => (o.id === order.id ? order : o)) : [...d.orders, order],
-        }));
-        return order;
-      },
-      setOrderStatus: (id, status) =>
-        update((d) => ({ ...d, orders: d.orders.map((o) => (o.id === id ? { ...o, status } : o)) })),
-      saveDress: (input) => {
-        const existing = input.id ? db.dresses.find((x) => x.id === input.id) : undefined;
-        const dress: Dress = existing
-          ? { ...existing, ...input, id: existing.id }
-          : { ...input, id: uid("d"), createdAt: today() };
-        update((d) => ({
-          ...d,
-          dresses: existing ? d.dresses.map((x) => (x.id === dress.id ? dress : x)) : [...d.dresses, dress],
-        }));
-        return dress;
-      },
+          const ex = d.attendance.find((x) => x.staffId === a.staffId && x.date === a.date);
+          return {
+            ...d,
+            attendance: ex ? d.attendance.map((x) => (x === ex ? { ...ex, ...a } : x)) : [...d.attendance, { ...a, id: uid("a") }],
+          };
+        }),
+
       resetDemo: () => {
-        const fresh = createSeed();
-        setDb(fresh);
-        setDrawer(null);
+        setDb(createSeed());
+        setSheet(null);
         setDialog(null);
       },
     };
-  }, [db, role, drawer, dialog, toasts, toast, update]);
+  }, [db, userId, sheet, dialog, toasts, toast, update]);
+}
 
+export type Store = NonNullable<ReturnType<typeof useStoreValue>>;
+
+const Ctx = createContext<Store | null>(null);
+
+export function StoreProvider({ children }: { children: React.ReactNode }) {
+  const store = useStoreValue();
   if (!store) {
     return (
       <div className="boot" aria-busy="true">
@@ -181,14 +255,4 @@ export function useStore() {
   const s = useContext(Ctx);
   if (!s) throw new Error("useStore outside StoreProvider");
   return s;
-}
-
-export function useClient(id?: string) {
-  const { db } = useStore();
-  return id ? db.clients.find((c) => c.id === id) : undefined;
-}
-
-export function useDress(id?: string) {
-  const { db } = useStore();
-  return id ? db.dresses.find((d) => d.id === id) : undefined;
 }

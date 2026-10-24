@@ -9,7 +9,7 @@ import { Shell } from "@/components/Shell";
 
 export const metadata: Metadata = {
   title: { default: "Lori CRM", template: "%s · Lori CRM" },
-  description: "CRM свадебного салона Lori: примерки, клиентки, продажа и аренда платьев, отчёты.",
+  description: "CRM свадебного салона Lori: журнал дня, невесты, договоры проката, оплаты, отчёты.",
   robots: { index: false, follow: false },
   appleWebApp: { title: "Lori CRM", capable: true, statusBarStyle: "default" },
 };

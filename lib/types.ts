@@ -1,76 +1,142 @@
 export type ID = string;
-/** Calendar date in local time, "YYYY-MM-DD" */
+/** Календарная дата "YYYY-MM-DD" */
 export type DateStr = string;
 
-export const SOURCES = ["Instagram", "Сайт", "Рекомендация", "Проходили мимо", "Другое"] as const;
-export type Source = (typeof SOURCES)[number];
+/* ---------- Люди ---------- */
 
-export type Measurements = { bust?: number; waist?: number; hips?: number; height?: number };
+export type Role = "owner" | "admin" | "employee";
 
-export type Client = {
-  id: ID;
-  name: string;
-  phone: string;
-  weddingDate?: DateStr;
-  source: Source;
-  measurements: Measurements;
-  notes: string;
-  createdAt: DateStr;
+export const ROLE_LABEL: Record<Role, string> = {
+  owner: "Владелец",
+  admin: "Администратор",
+  employee: "Консультант",
 };
 
-export const CATEGORIES = ["Свадебное", "Вечернее"] as const;
-export type Category = (typeof CATEGORIES)[number];
+export const MAX_EMPLOYEES = 30;
 
-export type Dress = {
+export type Staff = { id: ID; name: string; role: Role; active: boolean; phone?: string };
+
+/** Табель: верх страницы журнала — кто во сколько пришёл и ушёл */
+export type Attendance = { id: ID; staffId: ID; date: DateStr; in?: string; out?: string; dayOff?: boolean };
+
+/* ---------- Платья ---------- */
+
+/** Видно только владельцу */
+export type Supplier = { id: ID; name: string; phone?: string };
+
+/** Конкретный экземпляр платья. Одна модель может прийти от разных поставщиков. */
+export type DressItem = {
   id: ID;
-  name: string;
-  category: Category;
+  model: string;
   size: string;
-  color: string;
-  salePrice: number;
-  rentPrice: number;
-  forSale: boolean;
-  forRent: boolean;
+  supplierId: ID; // только владелец
+  purchasePrice: number; // закупка, только владелец
+  cost: number; // «стоимость платья» из договора — для компенсации ущерба
+  rentPrice: number; // базовая цена проката
+  receivedAt: DateStr;
   photo?: string;
-  createdAt: DateStr;
+  retired?: boolean;
 };
 
-export type FittingStatus = "planned" | "done" | "noshow" | "cancelled";
+/* ---------- Невесты и визиты ---------- */
 
-export type Fitting = {
+export type Bride = {
   id: ID;
-  clientId: ID;
+  name: string;
+  phones: string[];
+  eventDate?: DateStr;
+  consultantId: ID; // закрепляется при первом визите, возвратную встречает тот же консультант
+  createdAt: DateStr;
+  birthDate?: DateStr;
+  passport?: string;
+  address?: string;
+  notes: string;
+};
+
+/** «Зашли»: каждый приход невесты в салон */
+export type Visit = {
+  id: ID;
+  brideId: ID;
   date: DateStr;
-  time: string; // "HH:MM"
+  time: string;
+  consultantId: ID;
+  tried: boolean; // «Примерка»
   dressIds: ID[];
-  status: FittingStatus;
+  returning: boolean; // «Возвратная» — уже была в салоне раньше
   notes: string;
 };
 
-export type OrderType = "sale" | "rent";
-/** booked: оформлено, ждёт выдачи · issued: выдано (для аренды — у клиентки) · returned: аренда возвращена */
-export type OrderStatus = "booked" | "issued" | "returned" | "cancelled";
+/* ---------- Договор ---------- */
 
-export type Order = {
+/** booked — договор на залог; issued — выдано по договору аренды; returned — принято; refused — отказ, залог остаётся салону */
+export type BookingStatus = "booked" | "issued" | "returned" | "refused";
+
+export type Accessory = { name: string; price: number };
+
+export type Booking = {
   id: ID;
-  type: OrderType;
-  clientId: ID;
-  dressId: ID;
-  fittingId?: ID;
-  price: number;
-  createdAt: DateStr;
+  depositNo: number; // № договора на залог
+  rentNo?: number; // № договора на аренду, появляется при выдаче
+  brideId: ID;
+  consultantId: ID;
+  itemId: ID;
+  createdAt: DateStr; // «Запись»
+  eventDate: DateStr;
   issueDate: DateStr;
-  returnDate?: DateStr; // только для аренды
-  status: OrderStatus;
-  notes: string;
+  returnDate: DateStr;
+  rentPrice: number; // «Сумма»
+  deposit: number; // «Залог», не возвращается при отказе
+  extra: number; // «Доп»
+  accessories: Accessory[];
+  veil?: string;
+  tasks: string[]; // подгонка: «пришить пуговицы», «вставка» и т. п.
+  status: BookingStatus;
+  issuedAt?: DateStr;
+  returnedAt?: DateStr;
+  refusedAt?: DateStr;
+  refuseReason?: string;
+  log: { date: DateStr; text: string }[]; // переносы даты и прочие отметки
+  createdBy: ID;
 };
 
-export type Role = "owner" | "admin";
+/* ---------- Деньги ---------- */
+
+export type PaymentKind = "deposit" | "balance" | "extra" | "fine";
+export type PayMethod = "cash" | "transfer";
+
+export const PAY_KIND_LABEL: Record<PaymentKind, string> = {
+  deposit: "Залог",
+  balance: "Остаток",
+  extra: "Доп",
+  fine: "Штраф",
+};
+
+export type Payment = {
+  id: ID;
+  bookingId: ID;
+  kind: PaymentKind;
+  amount: number;
+  date: DateStr;
+  method: PayMethod;
+  bank?: string;
+  reason?: string; // для штрафа: «не принесли вешалку»
+  recordedBy: ID;
+  confirmedAt?: DateStr; // подпись владельца
+};
+
+export type Cleaning = { id: ID; itemId: ID; bookingId?: ID; sentAt: DateStr; backAt?: DateStr; note?: string };
 
 export type DB = {
-  version: 1;
-  clients: Client[];
-  dresses: Dress[];
-  fittings: Fitting[];
-  orders: Order[];
+  version: 2;
+  staff: Staff[];
+  attendance: Attendance[];
+  suppliers: Supplier[];
+  items: DressItem[];
+  brides: Bride[];
+  visits: Visit[];
+  bookings: Booking[];
+  payments: Payment[];
+  cleanings: Cleaning[];
+  nextDepositNo: number;
+  nextRentNo: number;
 };

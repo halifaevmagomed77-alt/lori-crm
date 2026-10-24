@@ -29,6 +29,15 @@ const PATHS: Record<string, string> = {
   reset: "M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5",
   table: "M3 5h18v14H3zM3 10h18M3 15h18M9 5v14",
   chart: "M4 20V10M10 20V4M16 20v-7",
+  book: "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5ZM4 19a2 2 0 0 1 2-2h13M8 7h7M8 10h5",
+  file: "M6 3h8l4 4v14H6V3ZM14 3v4h4M9 12h6M9 16h6",
+  drop: "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z",
+  team: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 20c.5-3 2.7-5 5.5-5s5 2 5.5 5M13.5 15.3c.8-.2 1.6-.3 2.5-.3 2.8 0 5 2 5.5 5",
+  logout: "M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 8l-4 4 4 4M6 12h10",
+  door: "M5 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17M3 21h18M13 12h.5",
+  coin: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 9.5c0-1.4 1.3-2 3-2s3 .7 3 2-1.3 1.8-3 2.2-3 .9-3 2.3 1.3 2 3 2 3-.6 3-2M12 6v1.5M12 16.5V18",
+  truck: "M3 6h11v10H3zM14 9h4l3 3v4h-7M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM17.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
+  stamp: "M9 4h6l-1 7h4l1 4H5l1-4h4L9 4ZM5 19h14",
 };
 
 export function Icon({ name, size = 20, className }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {
