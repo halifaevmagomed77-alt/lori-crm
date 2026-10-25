@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { TEST_ACCOUNTS } from "@/lib/seed";
 import { useStore, type Permission } from "@/lib/store";
-import { ROLE_LABEL, type Role } from "@/lib/types";
+import { ROLE_LABEL } from "@/lib/types";
 import { DialogHost } from "./forms";
 import { SheetHost } from "./sheets";
 import { Icon } from "./ui";
@@ -132,43 +134,66 @@ export function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function Login() {
-  const { db, login, resetDemo, toast } = useStore();
-  const groups: Role[] = ["owner", "admin", "employee"];
+  const { login } = useStore();
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(login(name, password));
+  };
+
   return (
     <div className="login">
-      <div className="login-card">
+      <form className="login-card" onSubmit={submit}>
         <p className="wordmark login-mark">LORI</p>
-        <h1 className="login-title">Кто работает?</h1>
-        <p className="muted">В рабочей версии здесь вход по номеру телефона. В демо выберите учётную запись, чтобы увидеть, что доступно каждой роли.</p>
-        {groups.map((g) => {
-          const people = db.staff.filter((s) => s.role === g && s.active);
-          return (
-            <section key={g} className="login-group">
-              <h2 className="section-label">{g === "employee" ? `Консультанты (${people.length} из 30)` : ROLE_LABEL[g]}</h2>
-              <div className="login-list">
-                {people.map((s) => (
-                  <button key={s.id} type="button" className="login-btn" onClick={() => login(s.id)}>
-                    <span className="login-name">{s.name}</span>
-                    <span className="login-role">
-                      {g === "owner" ? "всё, включая финансы и поставщиков" : g === "admin" ? "текущая работа, без финансов" : "первичная запись невест"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-        <button
-          type="button"
-          className="link-btn small"
-          onClick={() => {
-            resetDemo();
-            toast("Демо-данные восстановлены");
-          }}
-        >
-          <Icon name="reset" size={14} /> Сбросить демо-данные
+        <h1 className="login-title">Вход в CRM</h1>
+        <label className="field">
+          <span className="field-label">Логин</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus />
+        </label>
+        <label className="field">
+          <span className="field-label">Пароль</span>
+          <span className="pass-wrap">
+            <input type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+            <button type="button" className="link-btn small" onClick={() => setShow((v) => !v)}>
+              {show ? "Скрыть" : "Показать"}
+            </button>
+          </span>
+        </label>
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="btn btn-block">
+          Войти
         </button>
-      </div>
+        <details className="details test-accounts">
+          <summary>Тестовые учётные записи</summary>
+          <table className="table table-compact">
+            <thead>
+              <tr>
+                <th scope="col">Роль</th>
+                <th scope="col">Логин</th>
+                <th scope="col">Пароль</th>
+              </tr>
+            </thead>
+            <tbody>
+              {TEST_ACCOUNTS.map((a) => (
+                <tr key={a.id}>
+                  <td>{a.name}</td>
+                  <td className="tabular">{a.login}</td>
+                  <td className="tabular">{a.password}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="field-hint">Владелец может сменить логины и пароли в разделе «Сотрудники». Эту подсказку уберём в рабочей версии.</p>
+        </details>
+      </form>
     </div>
   );
 }

@@ -10,11 +10,6 @@ export function pct(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`;
 }
 
-/** «Милена» → «Мил»: как пишут в журнале */
-export function initials(name: string) {
-  return name.slice(0, 3);
-}
-
 /** «Гасанова Хадижат Мурадовна» → «Гасанова Хадижат» */
 export function shortName(full: string) {
   return full.split(" ").slice(0, 2).join(" ");

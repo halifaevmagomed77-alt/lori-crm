@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { addDays, diffDays, fmtDate, fmtShort, today } from "@/lib/dates";
 import { idx, isOverdue, itemConflict, itemState, paid, rub, shortName } from "@/lib/derive";
+import { deletePhoto, savePhoto, usePhoto } from "@/lib/photos";
 import { useStore } from "@/lib/store";
 import { MAX_EMPLOYEES, ROLE_LABEL, type Booking, type Bride, type DressItem, type Payment, type Role, type Staff, type Supplier } from "@/lib/types";
 import { Field, Icon, Modal, Segmented } from "./ui";
@@ -175,7 +176,7 @@ function ItemPicker({
                 onClick={() => onToggle(i.id)}
               >
                 <span className="dress-pick-img">
-                  {i.photo ? <img src={i.photo} alt="" /> : <Icon name="dress" size={28} />}
+                  <DressPhoto src={i.photo} />
                   {on && (
                     <span className="dress-pick-check">
                       <Icon name="check" size={14} />
@@ -190,7 +191,9 @@ function ItemPicker({
             </li>
           );
         })}
-        {list.length === 0 && <li className="muted small">Ничего не нашлось</li>}
+        {list.length === 0 && (
+          <li className="muted small">{db.items.length ? "Ничего не нашлось" : "Платьев пока нет — владелец добавляет их в разделе «Платья» → «Поступление»"}</li>
+        )}
       </ul>
     </div>
   );
@@ -876,22 +879,101 @@ function BrideForm({ bride, onClose }: { bride?: Bride; onClose: () => void }) {
   );
 }
 
+/* ---------- Фото с устройства ---------- */
+
+export function DressPhoto({ src, alt = "", className }: { src?: string; alt?: string; className?: string }) {
+  const url = usePhoto(src);
+  if (!src) return <Icon name="dress" size={32} className={className} />;
+  return url ? <img src={url} alt={alt} className={className} /> : <span className="photo-loading" aria-hidden="true" />;
+}
+
+function PhotoUpload({ value, onChange }: { value?: string; onChange: (v?: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  return (
+    <div className="photo-upload">
+      <div className="photo-preview">
+        <DressPhoto src={value} alt="Фото платья" />
+      </div>
+      <div className="photo-actions">
+        <label className="btn btn-ghost btn-small">
+          <Icon name="plus" size={16} /> {value ? "Заменить фото" : "Загрузить фото"}
+          <input
+            type="file"
+            accept="image/*"
+            className="visually-hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              setBusy(true);
+              setErr("");
+              try {
+                onChange(await savePhoto(f));
+              } catch {
+                setErr("Не получилось загрузить фото. Попробуйте другой файл.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </label>
+        {value && (
+          <button type="button" className="link-btn small" onClick={() => onChange(undefined)}>
+            Убрать фото
+          </button>
+        )}
+        <span className="field-hint">{busy ? "Загружаем…" : "С телефона можно сразу сфотографировать платье"}</span>
+        {err && <span className="field-error">{err}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Подтверждение опасного действия внутри формы ---------- */
+
+function DangerZone({ label, note, confirmText, onConfirm, children }: { label: string; note: string; confirmText: string; onConfirm: () => void; children?: React.ReactNode }) {
+  const [ask, setAsk] = useState(false);
+  return (
+    <div className="danger-zone">
+      {!ask ? (
+        <button type="button" className="btn btn-ghost btn-danger btn-small" onClick={() => setAsk(true)}>
+          {label}
+        </button>
+      ) : (
+        <div className="danger-confirm" role="alert">
+          <p>{note}</p>
+          {children}
+          <div className="danger-actions">
+            <button type="button" className="btn btn-small btn-ghost" onClick={() => setAsk(false)}>
+              Отмена
+            </button>
+            <button type="button" className="btn btn-small btn-red" onClick={onConfirm}>
+              {confirmText}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- Поступление платья (только владелец) ---------- */
 
-const PHOTOS = Array.from({ length: 24 }, (_, i) => `/dresses/d${String(i + 1).padStart(2, "0")}.jpg`);
-
 function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) {
-  const { db, saveItem, toast, openDialog, open } = useStore();
+  const { db, saveItem, removeItem, toast, openDialog, open, closeSheet } = useStore();
   const models = [...new Set(db.items.map((i) => i.model))].sort();
   const [model, setModel] = useState(item?.model ?? "");
   const [size, setSize] = useState(item?.size ?? "44");
   const [supplier, setSupplier] = useState(item?.supplierId ?? db.suppliers[0]?.id ?? "");
-  const [purchase, setPurchase] = useState(String(item?.purchasePrice ?? ""));
-  const [cost, setCost] = useState(String(item?.cost ?? ""));
-  const [rent, setRent] = useState(String(item?.rentPrice ?? ""));
+  const [purchase, setPurchase] = useState(String(item?.purchasePrice || ""));
+  const [cost, setCost] = useState(String(item?.cost || ""));
+  const [rent, setRent] = useState(String(item?.rentPrice || ""));
   const [received, setReceived] = useState(item?.receivedAt ?? today());
   const [photo, setPhoto] = useState(item?.photo);
   const [tried, setTried] = useState(false);
+  const used = item ? db.bookings.some((b) => b.itemId === item.id) : false;
+
   return (
     <Modal
       title={item ? `${item.model}, р. ${item.size}` : "Поступление платья"}
@@ -903,8 +985,10 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
           label={item ? "Сохранить" : "Добавить в салон"}
           onSubmit={() => {
             setTried(true);
-            if (!model.trim() || !supplier || !rent) return;
+            if (!model.trim() || !rent) return;
+            if (item?.photo && item.photo !== photo) deletePhoto(item.photo);
             const saved = saveItem({
+              ...(item ?? {}),
               id: item?.id,
               model: model.trim(),
               size,
@@ -922,9 +1006,12 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
         />
       }
     >
+      <Field group label="Фото">
+        <PhotoUpload value={photo} onChange={setPhoto} />
+      </Field>
       <div className="grid-3">
         <Field label="Модель" error={tried && !model.trim() ? "Укажите модель" : undefined}>
-          <input value={model} onChange={(e) => setModel(e.target.value)} list="models" placeholder="Sara" />
+          <input value={model} onChange={(e) => setModel(e.target.value)} list="models" placeholder="Например, Sara" />
           <datalist id="models">
             {models.map((m) => (
               <option key={m} value={m} />
@@ -945,6 +1032,7 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
       <Field label="Поставщик" hint="Видит только владелец">
         <div className="inline-row">
           <select value={supplier} onChange={(e) => setSupplier(e.target.value)}>
+            <option value="">Не указан</option>
             {db.suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -967,25 +1055,34 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
           <input type="number" inputMode="numeric" value={rent} onChange={(e) => setRent(e.target.value)} />
         </Field>
       </div>
-      <Field group label="Фото" hint="В рабочей версии — загрузка своих фото">
-        <ul className="photo-pick">
-          {PHOTOS.map((p) => (
-            <li key={p}>
-              <button type="button" aria-pressed={photo === p} className={photo === p ? "is-on" : ""} onClick={() => setPhoto(p)}>
-                <img src={p} alt="" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Field>
+      {item && (
+        <DangerZone
+          label={used ? "Снять с проката" : "Удалить платье"}
+          confirmText={used ? "Снять с проката" : "Удалить навсегда"}
+          note={
+            used
+              ? "По этому платью уже были записи. Оно исчезнет из списков и из выбора при записи, но останется в истории и отчётах. Вернуть можно в «Платья → Снятые с проката»."
+              : "Платье ещё ни разу не записывали. Оно будет удалено полностью вместе с фото."
+          }
+          onConfirm={() => {
+            const r = removeItem(item.id);
+            toast(r === "archived" ? `${item.model} снято с проката` : `${item.model} удалено`);
+            closeSheet();
+            onClose();
+          }}
+        />
+      )}
     </Modal>
   );
 }
 
 function SupplierForm({ supplier, onClose }: { supplier?: Supplier; onClose: () => void }) {
-  const { saveSupplier, toast, closeDialog } = useStore();
+  const { db, saveSupplier, removeSupplier, toast, closeDialog } = useStore();
   const [name, setName] = useState(supplier?.name ?? "");
   const [phone, setPhone] = useState(supplier?.phone ?? "");
+  const items = supplier ? db.items.filter((i) => i.supplierId === supplier.id) : [];
+  const others = db.suppliers.filter((s) => s.id !== supplier?.id);
+  const [moveTo, setMoveTo] = useState("");
   return (
     <Modal
       title={supplier ? "Поставщик" : "Новый поставщик"}
@@ -1009,6 +1106,33 @@ function SupplierForm({ supplier, onClose }: { supplier?: Supplier; onClose: () 
       <Field label="Телефон">
         <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
       </Field>
+      {supplier && (
+        <DangerZone
+          label="Удалить поставщика"
+          confirmText="Удалить"
+          note={
+            items.length
+              ? `У поставщика ${items.length} платьев. Выберите, к кому их перенести, — история проката сохранится.`
+              : "Платьев от этого поставщика нет, он будет удалён."
+          }
+          onConfirm={() => {
+            removeSupplier(supplier.id, moveTo);
+            toast(`${supplier.name} удалён`);
+            closeDialog();
+          }}
+        >
+          {items.length > 0 && (
+            <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} aria-label="Перенести платья к поставщику">
+              <option value="">Поставщик не указан</option>
+              {others.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </DangerZone>
+      )}
     </Modal>
   );
 }
@@ -1016,14 +1140,23 @@ function SupplierForm({ supplier, onClose }: { supplier?: Supplier; onClose: () 
 /* ---------- Сотрудник ---------- */
 
 function StaffForm({ staff, onClose }: { staff?: Staff; onClose: () => void }) {
-  const { db, saveStaff, toast, user } = useStore();
+  const { db, saveStaff, removeStaff, toast, user, logout } = useStore();
   const [name, setName] = useState(staff?.name ?? "");
   const [phone, setPhone] = useState(staff?.phone ?? "");
+  const [login, setLogin] = useState(staff?.login ?? "");
+  const [password, setPassword] = useState(staff?.password ?? "");
   const [role, setRole] = useState<Role>(staff?.role ?? "employee");
   const [active, setActive] = useState(staff?.active ?? true);
+  const [tried, setTried] = useState(false);
   const employees = db.staff.filter((s) => s.role === "employee" && s.active).length;
   const limit = !staff && role === "employee" && employees >= MAX_EMPLOYEES;
   const roles: Role[] = user?.role === "owner" ? ["employee", "admin"] : ["employee"];
+  const loginTaken = db.staff.some((s) => s.id !== staff?.id && s.login.toLowerCase() === login.trim().toLowerCase());
+  const brides = staff ? db.brides.filter((b) => b.consultantId === staff.id).length : 0;
+  const colleagues = db.staff.filter((s) => s.role === "employee" && s.active && s.id !== staff?.id);
+  const [moveTo, setMoveTo] = useState(colleagues[0]?.id ?? "");
+  const isSelf = staff?.id === user?.id;
+
   return (
     <Modal
       title={staff ? staff.name : "Новый сотрудник"}
@@ -1031,22 +1164,31 @@ function StaffForm({ staff, onClose }: { staff?: Staff; onClose: () => void }) {
       footer={
         <Foot
           onClose={onClose}
-          label="Сохранить"
+          label={staff ? "Сохранить" : "Создать учётную запись"}
           onSubmit={() => {
-            if (!name.trim() || limit) return;
-            saveStaff({ id: staff?.id, name: name.trim(), phone, role, active });
-            toast(staff ? "Сохранено" : "Учётная запись создана");
+            setTried(true);
+            if (!name.trim() || !login.trim() || password.length < 4 || loginTaken || limit) return;
+            saveStaff({ id: staff?.id, name: name.trim(), phone, role, active, login: login.trim(), password });
+            toast(staff ? "Сохранено" : `Учётная запись создана: ${login.trim()}`);
             onClose();
           }}
         />
       }
     >
-      <Field label="Имя">
-        <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-      </Field>
-      <Field label="Телефон" hint="В рабочей версии — для входа по SMS-коду">
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
-      </Field>
+      <div className="grid-2">
+        <Field label="Имя" error={tried && !name.trim() ? "Укажите имя" : undefined}>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+        <Field label="Телефон">
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
+        </Field>
+        <Field label="Логин" error={tried && !login.trim() ? "Придумайте логин" : loginTaken ? "Такой логин уже занят" : undefined}>
+          <input value={login} onChange={(e) => setLogin(e.target.value)} autoCapitalize="none" autoComplete="off" />
+        </Field>
+        <Field label="Пароль" hint="Не короче 4 символов" error={tried && password.length < 4 ? "Слишком короткий пароль" : undefined}>
+          <input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
+        </Field>
+      </div>
       {staff?.role !== "owner" && (
         <Field label="Роль">
           <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
@@ -1058,13 +1200,44 @@ function StaffForm({ staff, onClose }: { staff?: Staff; onClose: () => void }) {
           </select>
         </Field>
       )}
-      {staff && staff.role !== "owner" && (
+      {staff && staff.role !== "owner" && !active && (
         <label className="check">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-          <span>Работает (снимите галочку, чтобы закрыть доступ)</span>
+          <span>Вернуть доступ</span>
         </label>
       )}
       {limit && <p className="field-error">Достигнут лимит: {MAX_EMPLOYEES} консультантов.</p>}
+      {staff && staff.role !== "owner" && !isSelf && staff.active && (
+        <DangerZone
+          label="Удалить сотрудника"
+          confirmText="Удалить"
+          note={
+            brides
+              ? `Сотрудник больше не сможет войти. За ним закреплено невест: ${brides}. Выберите, к кому из консультантов их перевести. Его имя останется в старых записях и отчётах.`
+              : "Сотрудник больше не сможет войти. Если у него уже были записи, имя останется в истории и отчётах."
+          }
+          onConfirm={() => {
+            const r = removeStaff(staff.id, brides ? moveTo : undefined);
+            toast(r === "deleted" ? `${staff.name} удалён` : `${staff.name}: доступ закрыт, история сохранена`);
+            onClose();
+          }}
+        >
+          {brides > 0 && (
+            <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} aria-label="Перевести невест к консультанту">
+              {colleagues.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </DangerZone>
+      )}
+      {isSelf && staff?.role !== "owner" && (
+        <button type="button" className="link-btn small" onClick={logout}>
+          Выйти из учётной записи
+        </button>
+      )}
     </Modal>
   );
 }

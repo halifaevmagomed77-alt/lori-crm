@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { PageHead } from "@/components/Shell";
 import { Chip, Icon } from "@/components/ui";
 import { addDays, today } from "@/lib/dates";
@@ -8,10 +9,14 @@ import { useStore } from "@/lib/store";
 import { MAX_EMPLOYEES, ROLE_LABEL } from "@/lib/types";
 
 export default function StaffPage() {
-  const { db, openDialog, user } = useStore();
+  const { db, openDialog, user, can, clearAll, toast } = useStore();
+  const [showClosed, setShowClosed] = useState(false);
+  const [confirm, setConfirm] = useState("");
   const employees = db.staff.filter((s) => s.role === "employee" && s.active).length;
+  const closed = db.staff.filter((s) => !s.active).length;
   const month = { from: addDays(today(), -29), to: today() };
   const order = { owner: 0, admin: 1, employee: 2 } as const;
+  const isOwner = user?.role === "owner";
 
   return (
     <div className="page">
@@ -24,12 +29,17 @@ export default function StaffPage() {
           </button>
         }
       />
+      <p className="muted small page-intro">
+        Нажмите на сотрудника, чтобы сменить имя, логин или пароль, а также удалить его.
+        {!isOwner && " Администратор управляет учётными записями консультантов."}
+      </p>
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
               <th scope="col">Имя</th>
               <th scope="col">Роль</th>
+              <th scope="col">Логин</th>
               <th scope="col" className="num">Смен за 30 дней</th>
               <th scope="col" className="num">Встретила / записала</th>
               <th scope="col">Доступ</th>
@@ -37,18 +47,23 @@ export default function StaffPage() {
           </thead>
           <tbody>
             {db.staff
+              .filter((s) => s.active || showClosed)
               .slice()
               .sort((a, b) => order[a.role] - order[b.role] || Number(b.active) - Number(a.active))
               .map((s) => {
                 const shifts = db.attendance.filter((a) => a.staffId === s.id && a.in && a.date >= month.from).length;
                 const f = s.role === "employee" ? funnel(db, month, s.id) : null;
-                const editable = s.role !== "owner" && (user?.role === "owner" || s.role === "employee");
+                const editable = isOwner || s.role === "employee";
                 return (
                   <tr key={s.id} className={editable ? "tr-click" : undefined} onClick={() => editable && openDialog({ kind: "staff", staff: s })}>
                     <td>
                       <span className="person-name">{s.name}</span>
+                      {s.id === user?.id && <span className="muted small"> · это вы</span>}
                     </td>
                     <td data-label="Роль">{ROLE_LABEL[s.role]}</td>
+                    <td data-label="Логин" className="tabular">
+                      {editable ? s.login : "—"}
+                    </td>
                     <td data-label="Смен" className="num">
                       {s.role === "owner" ? "—" : shifts}
                     </td>
@@ -62,9 +77,36 @@ export default function StaffPage() {
           </tbody>
         </table>
       </div>
-      <p className="muted small page-note">
-        Приход и уход сотрудники отмечают в журнале дня. Администратор может исправить отметки и записи любого консультанта.
-      </p>
+      {closed > 0 && (
+        <label className="check small page-note">
+          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+          <span>Показать удалённых сотрудников ({closed}) — их имена остаются в истории записей</span>
+        </label>
+      )}
+
+      {can("reports") && (
+        <section className="panel danger-panel">
+          <h2 className="panel-title">Очистить все данные</h2>
+          <p className="small">
+            Удалит всех невест, визиты, договоры, оплаты, платья, фото, поставщиков, химчистку и табель. Учётные записи сотрудников останутся. Отменить нельзя.
+          </p>
+          <div className="inline-row">
+            <input className="date-input" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Напишите: очистить" aria-label="Подтверждение очистки" />
+            <button
+              type="button"
+              className="btn btn-red"
+              disabled={confirm.trim().toLowerCase() !== "очистить"}
+              onClick={() => {
+                clearAll();
+                setConfirm("");
+                toast("Все данные удалены, CRM как новая");
+              }}
+            >
+              Очистить
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

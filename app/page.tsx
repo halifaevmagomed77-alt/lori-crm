@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PageHead } from "@/components/Shell";
 import { Chip, Icon } from "@/components/ui";
 import { addDays, fmtDay, parseDate, today, weekday } from "@/lib/dates";
-import { daySummary, funnel, idx, initials, pct, rub, shortName } from "@/lib/derive";
+import { daySummary, funnel, idx, pct, rub, shortName } from "@/lib/derive";
 import { useStore } from "@/lib/store";
 import type { Booking, Visit } from "@/lib/types";
 
@@ -22,19 +22,25 @@ export default function JournalPage() {
   const isToday = date === today();
   const consName = (id: string) => I.staff.get(id)?.name ?? "—";
 
-  const tally = <T extends { consultantId: string }>(list: T[]) =>
-    list.length ? (
+  /** Итог строки: сколько у каждого консультанта и всего — полными именами */
+  const tally = <T extends { consultantId: string }>(list: T[]) => {
+    if (!list.length) return <span className="tally-empty">—</span>;
+    const counts = new Map<string, number>();
+    list.forEach((x) => counts.set(x.consultantId, (counts.get(x.consultantId) ?? 0) + 1));
+    return (
       <span className="tally">
-        {list.map((x, i) => (
-          <span key={i} className="tally-mark">
-            {initials(consName(x.consultantId))}
-          </span>
-        ))}
-        <span className="tally-total">= {list.length}</span>
+        <span className="tally-total">{list.length}</span>
+        {[...counts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([id, n]) => (
+            <span key={id} className="who">
+              {consName(id)}
+              {n > 1 && <span className="who-n">{n}</span>}
+            </span>
+          ))}
       </span>
-    ) : (
-      <span className="tally-empty">—</span>
     );
+  };
 
   const visitList = (list: Visit[]) => (
     <ul className="entries">

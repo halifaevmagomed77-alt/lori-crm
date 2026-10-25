@@ -4,6 +4,7 @@ import { fmtDate, fmtShort, relDay, today } from "@/lib/dates";
 import { ITEM_STATE_LABEL, STATUS_LABEL, idx, isOverdue, itemState, paid, rub, shortName } from "@/lib/derive";
 import { useStore } from "@/lib/store";
 import { PAY_KIND_LABEL, type Booking, type Bride, type DressItem, type Payment } from "@/lib/types";
+import { DressPhoto } from "./forms";
 import { Chip, Drawer, Icon, type Tone } from "./ui";
 
 export const STATUS_TONE: Record<Booking["status"], Tone> = { booked: "warn", issued: "info", returned: "good", refused: "bad" };
@@ -354,7 +355,7 @@ function BrideCard({ b }: { b: Bride }) {
 /* ---------- Платье ---------- */
 
 function ItemCard({ it }: { it: DressItem }) {
-  const { db, can, open, openDialog, sendCleaning, toast } = useStore();
+  const { db, can, open, openDialog, sendCleaning, toast, restoreItem } = useStore();
   const I = idx(db);
   const { state, booking } = itemState(db, it.id);
   const bookings = (I.bookingsByItem.get(it.id) ?? []).slice().sort((a, b) => b.issueDate.localeCompare(a.issueDate));
@@ -364,11 +365,10 @@ function ItemCard({ it }: { it: DressItem }) {
 
   return (
     <article className="paper entry">
-      {it.photo && (
-        <div className="item-hero">
-          <img src={it.photo} alt={`Платье ${it.model}`} />
-        </div>
-      )}
+      <div className="item-hero">
+        <DressPhoto src={it.photo} alt={`Платье ${it.model}`} />
+      </div>
+      {it.retired && <p className="callout callout-info">Платье снято с проката. Его история сохранена в отчётах.</p>}
       <header className="entry-head">
         <h2 className="entry-title">{it.model}</h2>
         <Chip tone={ITEM_TONE[state]}>{ITEM_STATE_LABEL[state]}</Chip>
@@ -401,7 +401,7 @@ function ItemCard({ it }: { it: DressItem }) {
           <>
             <div className="line line-owner">
               <dt>Поставщик</dt>
-              <dd>{I.supplier.get(it.supplierId)?.name ?? "—"}</dd>
+              <dd>{I.supplier.get(it.supplierId)?.name ?? "не указан"}</dd>
             </div>
             <div className="line line-owner">
               <dt>Закупка</dt>
@@ -414,7 +414,7 @@ function ItemCard({ it }: { it: DressItem }) {
         )}
       </dl>
       <div className="entry-actions">
-        {state !== "issued" && (
+        {state !== "issued" && !it.retired && (
           <button type="button" className="btn" onClick={() => openDialog({ kind: "booking", itemId: it.id })}>
             Записать на это платье
           </button>
@@ -433,7 +433,19 @@ function ItemCard({ it }: { it: DressItem }) {
         )}
         {can("receiveItems") && (
           <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "item", item: it })}>
-            <Icon name="edit" size={16} /> Изменить
+            <Icon name="edit" size={16} /> Изменить, фото, удалить
+          </button>
+        )}
+        {it.retired && can("receiveItems") && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => {
+              restoreItem(it.id);
+              toast(`${it.model} снова в прокате`);
+            }}
+          >
+            Вернуть в прокат
           </button>
         )}
       </div>

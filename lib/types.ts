@@ -14,7 +14,8 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const MAX_EMPLOYEES = 30;
 
-export type Staff = { id: ID; name: string; role: Role; active: boolean; phone?: string };
+/** login + password — в прототипе хранятся в браузере; в рабочей версии пароль только в виде хэша на сервере */
+export type Staff = { id: ID; name: string; role: Role; active: boolean; phone?: string; login: string; password: string };
 
 /** Табель: верх страницы журнала — кто во сколько пришёл и ушёл */
 export type Attendance = { id: ID; staffId: ID; date: DateStr; in?: string; out?: string; dayOff?: boolean };
@@ -29,13 +30,13 @@ export type DressItem = {
   id: ID;
   model: string;
   size: string;
-  supplierId: ID; // только владелец
+  supplierId: ID; // только владелец; "" — не указан
   purchasePrice: number; // закупка, только владелец
   cost: number; // «стоимость платья» из договора — для компенсации ущерба
   rentPrice: number; // базовая цена проката
   receivedAt: DateStr;
-  photo?: string;
-  retired?: boolean;
+  photo?: string; // "idb:<id>" — фото, загруженное с устройства
+  retired?: boolean; // снято с проката: в списках не видно, в отчётах история сохраняется
 };
 
 /* ---------- Невесты и визиты ---------- */
@@ -127,7 +128,7 @@ export type Payment = {
 export type Cleaning = { id: ID; itemId: ID; bookingId?: ID; sentAt: DateStr; backAt?: DateStr; note?: string };
 
 export type DB = {
-  version: 2;
+  version: 3;
   staff: Staff[];
   attendance: Attendance[];
   suppliers: Supplier[];

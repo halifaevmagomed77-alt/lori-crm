@@ -1,12 +1,13 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { createSeed } from "./seed";
+import { createInitial } from "./seed";
+import { clearPhotos, deletePhoto } from "./photos";
 import { today } from "./dates";
 import type { Attendance, Booking, Bride, DB, DressItem, Payment, Role, Staff, Supplier, Visit } from "./types";
 
-const KEY = "lori-crm:v2";
-const USER_KEY = "lori-crm:user";
+const KEY = "lori-crm:v3";
+const USER_KEY = "lori-crm:session-v3";
 
 /* ---------- Права ---------- */
 
@@ -56,12 +57,12 @@ function load(): DB {
     const raw = window.localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as DB;
-      if (parsed.version === 2) return parsed;
+      if (parsed.version === 3) return parsed;
     }
   } catch {
     /* хранилище недоступно — работаем в памяти */
   }
-  return createSeed();
+  return createInitial();
 }
 
 function useStoreValue() {
@@ -116,11 +117,16 @@ function useStoreValue() {
       user,
       role: (user?.role ?? "employee") as Role,
       can: (p: Permission) => !!user && can(user.role, p),
-      login: (id: string) => {
-        setUserId(id);
+      /** Возвращает текст ошибки или null при успешном входе */
+      login: (login: string, password: string): string | null => {
+        const s = db.staff.find((x) => x.login.toLowerCase() === login.trim().toLowerCase());
+        if (!s || s.password !== password) return "Неверный логин или пароль";
+        if (!s.active) return "Доступ для этой учётной записи закрыт";
+        setUserId(s.id);
         try {
-          window.localStorage.setItem(USER_KEY, id);
+          window.localStorage.setItem(USER_KEY, s.id);
         } catch {}
+        return null;
       },
       logout: () => {
         setUserId(null);
@@ -226,8 +232,47 @@ function useStoreValue() {
           };
         }),
 
-      resetDemo: () => {
-        setDb(createSeed());
+      /** Платье с историей снимается с проката (отчёты сохраняются), без истории — удаляется полностью */
+      removeItem: (id: string): "archived" | "deleted" => {
+        const used = db.bookings.some((b) => b.itemId === id) || db.cleanings.some((c) => c.itemId === id);
+        const item = db.items.find((i) => i.id === id);
+        if (used) {
+          update((d) => ({ ...d, items: d.items.map((i) => (i.id === id ? { ...i, retired: true } : i)) }));
+          return "archived";
+        }
+        deletePhoto(item?.photo);
+        update((d) => ({ ...d, items: d.items.filter((i) => i.id !== id) }));
+        return "deleted";
+      },
+      restoreItem: (id: string) => update((d) => ({ ...d, items: d.items.map((i) => (i.id === id ? { ...i, retired: false } : i)) })),
+      /** Платья удаляемого поставщика переходят к другому поставщику или становятся «поставщик не указан» */
+      removeSupplier: (id: string, moveTo: string) =>
+        update((d) => ({
+          ...d,
+          items: d.items.map((i) => (i.supplierId === id ? { ...i, supplierId: moveTo } : i)),
+          suppliers: d.suppliers.filter((s) => s.id !== id),
+        })),
+      /**
+       * Сотрудник без истории удаляется полностью.
+       * С историей — доступ закрывается, имя остаётся в старых записях и отчётах,
+       * а его невесты переходят к другому консультанту.
+       */
+      removeStaff: (id: string, moveBridesTo?: string): "archived" | "deleted" => {
+        const used =
+          db.visits.some((v) => v.consultantId === id) ||
+          db.bookings.some((b) => b.consultantId === id || b.createdBy === id) ||
+          db.payments.some((p) => p.recordedBy === id);
+        update((d) => {
+          const brides = moveBridesTo ? d.brides.map((b) => (b.consultantId === id ? { ...b, consultantId: moveBridesTo } : b)) : d.brides;
+          if (used) return { ...d, brides, staff: d.staff.map((s) => (s.id === id ? { ...s, active: false } : s)) };
+          return { ...d, brides, staff: d.staff.filter((s) => s.id !== id), attendance: d.attendance.filter((a) => a.staffId !== id) };
+        });
+        return used ? "archived" : "deleted";
+      },
+      /** Полная очистка: удаляются все невесты, записи, платья и поставщики; учётные записи остаются */
+      clearAll: () => {
+        setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff }));
+        clearPhotos();
         setSheet(null);
         setDialog(null);
       },
