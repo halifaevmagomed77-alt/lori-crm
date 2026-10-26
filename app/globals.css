@@ -668,3 +668,13 @@ button.mini-row:hover { background: var(--sand); }
 .team[open] .team-summary { margin-bottom: 6px; }
 /* QA-фикс: открытое меню «Ещё» перекрывалось круглыми кнопками */
 .app:has(.tab-more[open]) .fab-group { display: none; }
+
+/* ---------- Демо-версия ---------- */
+.demo-bar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 8px clamp(16px, 3vw, 40px); background: #fff7e6; border-bottom: 1px solid #f0dfb8; font-size: 13px; }
+.demo-tag { padding: 2px 8px; border-radius: 999px; background: var(--warn); color: #fff; font-weight: 700; font-size: 11px; letter-spacing: .04em; }
+.demo-text { flex: 1 1 260px; color: #6b4f12; }
+.demo-feedback { min-height: 32px; }
+.empty-db { margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.empty-db span { flex: 1 1 320px; }
+.callout textarea { width: 100%; margin-top: 8px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px; font-size: 13px; }
+.callout-info { flex-wrap: wrap; }

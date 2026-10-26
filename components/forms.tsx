@@ -6,6 +6,7 @@ import { idx, isOverdue, itemConflict, itemState, paid, rub, shortName } from "@
 import { deletePhoto, savePhoto, usePhoto } from "@/lib/photos";
 import { useStore } from "@/lib/store";
 import { MAX_EMPLOYEES, ROLE_LABEL, type Booking, type Bride, type DressItem, type Payment, type Role, type Staff, type Supplier } from "@/lib/types";
+import { FeedbackForm } from "./Demo";
 import { Field, Icon, Modal, Segmented } from "./ui";
 
 export function DialogHost() {
@@ -35,6 +36,8 @@ export function DialogHost() {
       return <StaffForm key="st" staff={dialog.staff} onClose={close} />;
     case "supplier":
       return <SupplierForm key="su" supplier={dialog.supplier} onClose={close} />;
+    case "feedback":
+      return <FeedbackForm key="fb" onClose={close} />;
   }
 }
 

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { TEST_ACCOUNTS } from "@/lib/seed";
 import { useStore, type Permission } from "@/lib/store";
 import { ROLE_LABEL } from "@/lib/types";
+import { DemoBar } from "./Demo";
 import { DialogHost } from "./forms";
 import { SheetHost } from "./sheets";
 import { Icon } from "./ui";
@@ -76,6 +77,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="main" id="main">
+        <DemoBar />
         {allowed ? (
           children
         ) : (
@@ -140,9 +142,13 @@ function Login() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(login(name, password));
+    const err = login(name, password);
+    setError(err);
+    // после входа — всегда журнал: прошлый раздел может быть закрыт для новой роли
+    if (!err) router.push("/");
   };
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyDbHint } from "@/components/Demo";
 import { PageHead } from "@/components/Shell";
 import { Chip, Icon } from "@/components/ui";
 import { addDays, fmtDay, parseDate, today, weekday } from "@/lib/dates";
@@ -129,6 +130,7 @@ export default function JournalPage() {
         }
       />
 
+      <EmptyDbHint />
       <article className="paper sheet-day">
         <h2 className="day-title">
           {fmtDay(date)} <span className="day-wd">({wd[0].toUpperCase() + wd.slice(1)})</span>

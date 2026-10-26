@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { createInitial } from "./seed";
+import { createDemo } from "./demo";
 import { clearPhotos, deletePhoto } from "./photos";
 import { today } from "./dates";
 import type { Attendance, Booking, Bride, DB, DressItem, Payment, Role, Staff, Supplier, Visit } from "./types";
@@ -46,6 +47,7 @@ export type Dialog =
   | { kind: "item"; item?: DressItem }
   | { kind: "staff"; staff?: Staff }
   | { kind: "supplier"; supplier?: Supplier }
+  | { kind: "feedback" }
   | null;
 
 type Toast = { id: number; text: string };
@@ -268,6 +270,18 @@ function useStoreValue() {
           return { ...d, brides, staff: d.staff.filter((s) => s.id !== id), attendance: d.attendance.filter((a) => a.staffId !== id) };
         });
         return used ? "archived" : "deleted";
+      },
+      /** Пример данных за год — чтобы посмотреть отчёты. Учётные записи остаются как есть. */
+      fillDemo: (): string | null => {
+        try {
+          const demo = createDemo(db.staff);
+          setDb(demo);
+          setSheet(null);
+          setDialog(null);
+          return null;
+        } catch (e) {
+          return e instanceof Error ? e.message : "Не получилось";
+        }
       },
       /** Полная очистка: удаляются все невесты, записи, платья и поставщики; учётные записи остаются */
       clearAll: () => {

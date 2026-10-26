@@ -9,7 +9,7 @@ import { useStore } from "@/lib/store";
 import { MAX_EMPLOYEES, ROLE_LABEL } from "@/lib/types";
 
 export default function StaffPage() {
-  const { db, openDialog, user, can, clearAll, toast } = useStore();
+  const { db, openDialog, user, can, clearAll, fillDemo, toast } = useStore();
   const [showClosed, setShowClosed] = useState(false);
   const [confirm, setConfirm] = useState("");
   const employees = db.staff.filter((s) => s.role === "employee" && s.active).length;
@@ -86,7 +86,23 @@ export default function StaffPage() {
 
       {can("reports") && (
         <section className="panel danger-panel">
-          <h2 className="panel-title">Очистить все данные</h2>
+          <h2 className="panel-title">Данные</h2>
+          <p className="small">
+            Для демонстрации можно заполнить CRM примером за год работы салона: невесты, договоры, оплаты, платья с фото, поставщики. Текущие данные при этом заменятся.
+          </p>
+          <div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                const err = fillDemo();
+                toast(err ?? "Готово: в базе пример за год работы салона");
+              }}
+            >
+              Заполнить примером
+            </button>
+          </div>
+          <h3 className="section-label">Очистить все данные</h3>
           <p className="small">
             Удалит всех невест, визиты, договоры, оплаты, платья, фото, поставщиков, химчистку и табель. Учётные записи сотрудников останутся. Отменить нельзя.
           </p>
