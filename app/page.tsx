@@ -17,6 +17,9 @@ export default function JournalPage() {
   const store = useStore();
   const { db, can, user, open, openDialog } = store;
   const [date, setDate] = useState(today());
+  const team = db.staff.filter((x) => x.role !== "owner" && x.active);
+  // при большом штате табель свёрнут, чтобы строки журнала были видны сразу
+  const [teamOpen, setTeamOpen] = useState(team.length <= 8);
   const I = idx(db);
   const s = daySummary(db, date);
   const isToday = date === today();
@@ -132,6 +135,10 @@ export default function JournalPage() {
           {isToday && <Chip tone="ink">сегодня</Chip>}
         </h2>
 
+        <details className="team" open={teamOpen} onToggle={(e) => setTeamOpen((e.currentTarget as HTMLDetailsElement).open)}>
+          <summary className="team-summary">
+            Табель: на смене {s.attendance.filter((a) => a.in && !a.dayOff).length} из {team.length}
+          </summary>
         <table className="attendance">
           <thead>
             <tr>
@@ -199,6 +206,7 @@ export default function JournalPage() {
               })}
           </tbody>
         </table>
+        </details>
 
         <div className="ledger">
           <Row label="Зашли" summary={tally(s.visits)} count={s.visits.length}>

@@ -661,3 +661,10 @@ button.mini-row:hover { background: var(--sand); }
   .attendance td .btn, .attendance td .link-btn { display: block; }
   .time-cell { width: 86px; }
 }
+/* QA-фикс: карточка в боковой панели растягивала кнопки по высоте */
+.entry { align-content: start; }
+.entry-actions .btn { align-self: start; }
+.team-summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink-blue); padding: 6px 0; }
+.team[open] .team-summary { margin-bottom: 6px; }
+/* QA-фикс: открытое меню «Ещё» перекрывалось круглыми кнопками */
+.app:has(.tab-more[open]) .fab-group { display: none; }

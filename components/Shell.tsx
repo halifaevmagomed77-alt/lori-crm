@@ -71,7 +71,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           LORI
         </Link>
         <button type="button" className="me-mini" onClick={logout} aria-label="Сменить пользователя">
-          {user.name} · {ROLE_LABEL[user.role].toLowerCase()}
+          {user.name === ROLE_LABEL[user.role] ? user.name : `${user.name} · ${ROLE_LABEL[user.role].toLowerCase()}`}
         </button>
       </header>
 
