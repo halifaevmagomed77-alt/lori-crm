@@ -2,25 +2,16 @@
 
 import { useState } from "react";
 import { EmptyDbHint } from "@/components/Demo";
-import { PageHead } from "@/components/Shell";
 import { Chip, Icon } from "@/components/ui";
 import { addDays, fmtDay, parseDate, today, weekday } from "@/lib/dates";
 import { daySummary, funnel, idx, pct, rub, shortName } from "@/lib/derive";
 import { useStore } from "@/lib/store";
-import type { Booking, Visit } from "@/lib/types";
-
-const nowTime = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+import type { Booking, Payment, Visit } from "@/lib/types";
 
 export default function JournalPage() {
   const store = useStore();
-  const { db, can, user, open, openDialog } = store;
+  const { db, can, user, open, openDialog, confirmPayment, toast } = store;
   const [date, setDate] = useState(today());
-  const team = db.staff.filter((x) => x.role !== "owner" && x.active);
-  // при большом штате табель свёрнут, чтобы строки журнала были видны сразу
-  const [teamOpen, setTeamOpen] = useState(team.length <= 8);
   const I = idx(db);
   const s = daySummary(db, date);
   const isToday = date === today();
@@ -103,113 +94,102 @@ export default function JournalPage() {
     .filter((r) => (r.visits || r.records) && (can("editAll") || r.c.id === user?.id));
   const total = funnel(db, { from: date, to: date });
 
-  const fineSum = s.fines.reduce((a, p) => a + p.amount, 0);
-  const rentSum = s.payments.filter((p) => p.kind !== "fine").reduce((a, p) => a + p.amount, 0);
-  const unconfirmed = s.payments.filter((p) => !p.confirmedAt);
+  const sumOf = (xs: number[]) => xs.reduce((a, x) => a + x, 0);
+  const deposits = s.payments.filter((p) => p.kind === "deposit");
+  const extraPays = s.payments.filter((p) => p.kind === "extra");
+  const withExtra = s.issued.filter((k) => k.extra > 0);
+  const money = {
+    deposit: sumOf(deposits.map((p) => p.amount)),
+    rent: sumOf(s.issued.map((k) => k.rentPrice)),
+    extra: sumOf(withExtra.map((k) => k.extra)) + sumOf(extraPays.map((p) => p.amount)),
+    fines: sumOf(s.fines.map((p) => p.amount)),
+  };
+  const isOwner = can("reports");
+
+  /** Оплата строкой: сумма, договор, способ и подпись владельца */
+  const payList = (list: Payment[]) => (
+    <ul className="entries">
+      {list.map((p) => {
+        const k = I.booking.get(p.bookingId);
+        const b = k ? I.bride.get(k.brideId) : undefined;
+        return (
+          <li key={p.id} className="entry-li">
+            <button type="button" className="entry-row" onClick={() => open({ kind: "booking", id: p.bookingId })}>
+              <span className="entry-time">{rub(p.amount)}</span>
+              <span className="entry-name">{p.reason ?? (k ? `№ ${k.depositNo}` : "")}</span>
+              <span className="entry-cons">{b ? shortName(b.name) : ""}</span>
+              <span className="entry-cons">{p.method === "cash" ? "наличные" : p.bank ?? "перевод"}</span>
+            </button>
+            {p.confirmedAt ? (
+              <Chip tone="good">получено</Chip>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-small btn-red"
+                onClick={() => {
+                  confirmPayment(p.id);
+                  toast("Получение подтверждено");
+                }}
+              >
+                Подтвердить
+              </button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+  const sumList = (list: Booking[], pick: (k: Booking) => number, note?: (k: Booking) => string) => (
+    <ul className="entries">
+      {list.map((k) => (
+        <li key={k.id}>
+          <button type="button" className="entry-row" onClick={() => open({ kind: "booking", id: k.id })}>
+            <span className="entry-time">{rub(pick(k))}</span>
+            <span className="entry-name">{I.item.get(k.itemId)?.model}</span>
+            <span className="entry-cons">{shortName(I.bride.get(k.brideId)?.name ?? "")}</span>
+            {note && <span className="entry-cons">{note(k)}</span>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+  const moneyValue = (sum: number, n: number) =>
+    n ? (
+      <span className="money-val">
+        <strong>{rub(sum)}</strong>
+        <span className="muted small">· {n}</span>
+      </span>
+    ) : (
+      <span className="tally-empty">—</span>
+    );
 
   const wd = weekday(date);
   return (
-    <div className="page">
-      <PageHead
-        title="Журнал"
-        actions={
-          <div className="day-nav">
-            <button type="button" className="icon-btn" aria-label="Предыдущий день" onClick={() => setDate(addDays(date, -1))}>
-              <Icon name="chevronL" />
-            </button>
-            <input type="date" className="date-input" value={date} max={addDays(today(), 60)} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Дата" />
-            <button type="button" className="icon-btn" aria-label="Следующий день" onClick={() => setDate(addDays(date, 1))}>
-              <Icon name="chevronR" />
-            </button>
-            {!isToday && (
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => setDate(today())}>
-                Сегодня
-              </button>
-            )}
-          </div>
-        }
-      />
+    <div className="page page-journal">
+      <div className="date-bar">
+        <button type="button" className="icon-btn" aria-label="Предыдущий день" onClick={() => setDate(addDays(date, -1))}>
+          <Icon name="chevronL" />
+        </button>
+        <label className="date-pick">
+          <span className="date-big">{fmtDay(date)}</span>
+          <span className="date-wd">
+            {wd}
+            {isToday && " · сегодня"}
+          </span>
+          <input type="date" value={date} max={addDays(today(), 60)} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Выбрать дату" />
+        </label>
+        <button type="button" className="icon-btn" aria-label="Следующий день" onClick={() => setDate(addDays(date, 1))}>
+          <Icon name="chevronR" />
+        </button>
+        {!isToday && (
+          <button type="button" className="btn btn-small btn-ghost date-today" onClick={() => setDate(today())}>
+            Сегодня
+          </button>
+        )}
+      </div>
 
       <EmptyDbHint />
       <article className="paper sheet-day">
-        <h2 className="day-title">
-          {fmtDay(date)} <span className="day-wd">({wd[0].toUpperCase() + wd.slice(1)})</span>
-          {isToday && <Chip tone="ink">сегодня</Chip>}
-        </h2>
-
-        <details className="team" open={teamOpen} onToggle={(e) => setTeamOpen((e.currentTarget as HTMLDetailsElement).open)}>
-          <summary className="team-summary">
-            Табель: на смене {s.attendance.filter((a) => a.in && !a.dayOff).length} из {team.length}
-          </summary>
-        <table className="attendance">
-          <thead>
-            <tr>
-              <th scope="col">Сотрудник</th>
-              <th scope="col">Пришла</th>
-              <th scope="col">Ушла</th>
-            </tr>
-          </thead>
-          <tbody>
-            {db.staff
-              .filter((st) => st.role !== "owner" && st.active)
-              .map((st) => {
-                const a = s.attendance.find((x) => x.staffId === st.id);
-                const mine = st.id === user?.id && isToday;
-                const editable = can("manageStaff") || mine;
-                const set = (patch: { in?: string; out?: string; dayOff?: boolean }) =>
-                  store.setAttendance({ staffId: st.id, date, in: a?.in, out: a?.out, dayOff: a?.dayOff, ...patch });
-                return (
-                  <tr key={st.id} className={a?.dayOff ? "is-off" : undefined}>
-                    <th scope="row">{st.name}</th>
-                    {a?.dayOff ? (
-                      <td colSpan={2} className="off">
-                        выходной
-                        {editable && (
-                          <button type="button" className="link-btn small" onClick={() => set({ dayOff: false })}>
-                            отменить
-                          </button>
-                        )}
-                      </td>
-                    ) : (
-                      <>
-                        <td>
-                          {editable ? (
-                            <input type="time" className="time-cell" value={a?.in ?? ""} onChange={(e) => set({ in: e.target.value, dayOff: false })} aria-label={`${st.name}: пришла`} />
-                          ) : (
-                            a?.in ?? "—"
-                          )}
-                          {mine && !a?.in && (
-                            <button type="button" className="btn btn-small" onClick={() => set({ in: nowTime(), dayOff: false })}>
-                              Я пришла
-                            </button>
-                          )}
-                        </td>
-                        <td>
-                          {editable ? (
-                            <input type="time" className="time-cell" value={a?.out ?? ""} onChange={(e) => set({ out: e.target.value })} aria-label={`${st.name}: ушла`} />
-                          ) : (
-                            a?.out ?? "—"
-                          )}
-                          {mine && a?.in && !a.out && (
-                            <button type="button" className="btn btn-small btn-ghost" onClick={() => set({ out: nowTime() })}>
-                              Я ушла
-                            </button>
-                          )}
-                          {can("manageStaff") && !a?.in && (
-                            <button type="button" className="link-btn small" onClick={() => set({ dayOff: true, in: undefined, out: undefined })}>
-                              выходной
-                            </button>
-                          )}
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
-        </details>
-
         <div className="ledger">
           <Row label="Зашли" summary={tally(s.visits)} count={s.visits.length}>
             {visitList(s.visits)}
@@ -222,7 +202,7 @@ export default function JournalPage() {
           <Row label="Примерка" summary={tally(s.tried)} count={s.tried.length}>
             {visitList(s.tried)}
           </Row>
-          <Row label="Возвр-е" title="Возвратные невесты" summary={tally(s.returning)} count={s.returning.length}>
+          <Row label="Возвратные" summary={tally(s.returning)} count={s.returning.length}>
             {visitList(s.returning)}
           </Row>
           <Row label="Запись" title="Договор на залог" summary={tally(s.records)} count={s.records.length}>
@@ -296,59 +276,46 @@ export default function JournalPage() {
             }
             count={s.cleaning.length}
           />
-          <Row
-            label="Штрафы кл."
-            title="Штрафы невест"
-            summary={
-              s.fines.length ? (
-                <span className="tally">
-                  {s.fines.map((f) => (
-                    <button key={f.id} type="button" className="model-link fine" onClick={() => open({ kind: "booking", id: f.bookingId })}>
-                      {f.reason?.toLowerCase()} {rub(f.amount)}
-                    </button>
-                  ))}
-                  <span className="tally-total">= {rub(fineSum)}</span>
-                </span>
-              ) : (
-                <span className="tally-empty">—</span>
-              )
-            }
-            count={s.fines.length}
-          />
-          {can("reports") && (
+          {!isOwner && (
             <Row
-              label="Касса"
-              title="Оплаты за день"
+              label="Штрафы"
+              title="Штрафы невест"
               summary={
-                <span className="tally">
-                  <span>прокат {rub(rentSum)}</span>
-                  <span className="muted">· штрафы {rub(fineSum)}</span>
-                  {unconfirmed.length > 0 && <Chip tone="bad">{unconfirmed.length} ждут подтверждения</Chip>}
-                </span>
-              }
-              count={s.payments.length}
-            >
-              <ul className="entries">
-                {s.payments.map((p) => {
-                  const k = db.bookings.find((x) => x.id === p.bookingId);
-                  return (
-                    <li key={p.id}>
-                      <button type="button" className="entry-row" onClick={() => open({ kind: "booking", id: p.bookingId })}>
-                        <span className="entry-time">{rub(p.amount)}</span>
-                        <span className="entry-name">
-                          {p.kind === "deposit" ? "залог" : p.kind === "balance" ? "остаток" : p.kind === "extra" ? "доп" : "штраф"}
-                          {k ? ` · № ${k.depositNo}` : ""}
-                        </span>
-                        <span className="entry-cons">{p.method === "cash" ? "наличные" : p.bank ?? "перевод"}</span>
-                        {p.confirmedAt ? <Chip tone="good">получено</Chip> : <Chip tone="bad">подтвердить</Chip>}
+                s.fines.length ? (
+                  <span className="tally">
+                    {s.fines.map((f) => (
+                      <button key={f.id} type="button" className="model-link fine" onClick={() => open({ kind: "booking", id: f.bookingId })}>
+                        {f.reason?.toLowerCase() ?? "штраф"}
                       </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Row>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="tally-empty">—</span>
+                )
+              }
+              count={s.fines.length}
+            />
           )}
         </div>
+
+        {isOwner && (
+          <section className="ledger ledger-money" aria-label="Деньги за день">
+            <p className="money-head">Деньги за день · видите только вы</p>
+            <Row label="Залог" title="Залоги по договорам на залог" summary={moneyValue(money.deposit, deposits.length)} count={deposits.length}>
+              {payList(deposits)}
+            </Row>
+            <Row label="Аренда" title="Полная сумма аренды выданных платьев" summary={moneyValue(money.rent, s.issued.length)} count={s.issued.length}>
+              {sumList(s.issued, (k) => k.rentPrice, (k) => `залог был ${rub(k.deposit)}`)}
+            </Row>
+            <Row label="Доп" title="Фотосессия, серьги, фата и другое" summary={moneyValue(money.extra, withExtra.length + extraPays.length)} count={withExtra.length + extraPays.length}>
+              {sumList(withExtra, (k) => k.extra, (k) => k.accessories.map((a) => a.name.toLowerCase()).join(", "))}
+              {extraPays.length > 0 && payList(extraPays)}
+            </Row>
+            <Row label="Штрафы" title="Только штрафы невест" summary={moneyValue(money.fines, s.fines.length)} count={s.fines.length}>
+              {payList(s.fines)}
+            </Row>
+          </section>
+        )}
 
         {dayStats.length > 0 && (
           <div className="day-cons">

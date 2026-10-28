@@ -9,6 +9,26 @@ import type { Attendance, Booking, Bride, DB, DressItem, Payment, Role, Staff, S
 
 const KEY = "lori-crm:v3";
 const USER_KEY = "lori-crm:session-v3";
+const DEVICE_KEY = "lori-crm:device";
+
+/** Постоянный id этого браузера — по нему узнаём устройство салона */
+function deviceId() {
+  try {
+    let id = window.localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id = `dev${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      window.localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return "no-storage";
+  }
+}
+
+const nowTime = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
 /* ---------- Права ---------- */
 
@@ -16,14 +36,15 @@ export type Permission =
   | "reports" // финансовые отчёты
   | "suppliers" // поставщики и закупочные цены
   | "confirmPayments" // подпись владельца под оплатой
-  | "manageStaff" // учётки сотрудников и табель
+  | "manageStaff" // добавление и удаление сотрудников
+  | "attendance" // табель всех сотрудников
   | "editAll" // правка чужих записей, выдача, приёмка, отказ
   | "cleaning" // блок «Химчистка»
   | "receiveItems"; // поступление платьев
 
 const PERMS: Record<Role, Permission[]> = {
-  owner: ["reports", "suppliers", "confirmPayments", "manageStaff", "editAll", "cleaning", "receiveItems"],
-  admin: ["manageStaff", "editAll", "cleaning"],
+  owner: ["reports", "suppliers", "confirmPayments", "manageStaff", "attendance", "editAll", "cleaning", "receiveItems"],
+  admin: ["attendance", "editAll", "cleaning"],
   employee: [],
 };
 
@@ -48,6 +69,7 @@ export type Dialog =
   | { kind: "staff"; staff?: Staff }
   | { kind: "supplier"; supplier?: Supplier }
   | { kind: "feedback" }
+  | { kind: "comment"; target: "bride" | "booking"; id: string }
   | null;
 
 type Toast = { id: number; text: string };
@@ -73,6 +95,7 @@ function useStoreValue() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [device, setDevice] = useState("");
 
   useEffect(() => {
     const data = load();
@@ -83,6 +106,7 @@ function useStoreValue() {
     // единоразовая загрузка из localStorage после монтирования
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDb(data);
+    setDevice(deviceId());
     setUserId(u && data.staff.some((s) => s.id === u && s.active) ? u : null);
   }, []);
 
@@ -124,6 +148,8 @@ function useStoreValue() {
         const s = db.staff.find((x) => x.login.toLowerCase() === login.trim().toLowerCase());
         if (!s || s.password !== password) return "Неверный логин или пароль";
         if (!s.active) return "Доступ для этой учётной записи закрыт";
+        if (s.role === "employee" && db.salonDevice && db.salonDevice !== device)
+          return "Консультанты входят только с устройства салона";
         setUserId(s.id);
         try {
           window.localStorage.setItem(USER_KEY, s.id);
@@ -138,6 +164,28 @@ function useStoreValue() {
           window.localStorage.removeItem(USER_KEY);
         } catch {}
       },
+      /** Это устройство отмечено владельцем как устройство салона */
+      isSalonDevice: !!db.salonDevice && db.salonDevice === device,
+      salonDeviceSet: !!db.salonDevice,
+      setSalonDevice: (on: boolean) => update((d) => ({ ...d, salonDevice: on ? device : undefined })),
+      /** Отметка консультанта «пришла» / «ушла» — текущим временем */
+      checkIn: (kind: "in" | "out") =>
+        update((d) => {
+          const date = today();
+          const ex = d.attendance.find((x) => x.staffId === me && x.date === date);
+          const patch = kind === "in" ? { in: nowTime(), dayOff: false } : { out: nowTime() };
+          return {
+            ...d,
+            attendance: ex ? d.attendance.map((x) => (x === ex ? { ...ex, ...patch } : x)) : [...d.attendance, { id: uid("a"), staffId: me, date, ...patch }],
+          };
+        }),
+      /** Комментарий — единственное, что консультант может менять после сохранения */
+      saveComment: (target: "bride" | "booking", id: string, notes: string) =>
+        update((d) =>
+          target === "bride"
+            ? { ...d, brides: d.brides.map((b) => (b.id === id ? { ...b, notes } : b)) }
+            : { ...d, bookings: d.bookings.map((b) => (b.id === id ? { ...b, notes } : b)) },
+        ),
       sheet,
       open: (s: Sheet) => setSheet(s),
       closeSheet: () => setSheet(null),
@@ -275,7 +323,7 @@ function useStoreValue() {
       fillDemo: (): string | null => {
         try {
           const demo = createDemo(db.staff);
-          setDb(demo);
+          setDb({ ...demo, salonDevice: db.salonDevice });
           setSheet(null);
           setDialog(null);
           return null;
@@ -285,13 +333,13 @@ function useStoreValue() {
       },
       /** Полная очистка: удаляются все невесты, записи, платья и поставщики; учётные записи остаются */
       clearAll: () => {
-        setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff }));
+        setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff, salonDevice: d?.salonDevice }));
         clearPhotos();
         setSheet(null);
         setDialog(null);
       },
     };
-  }, [db, userId, sheet, dialog, toasts, toast, update]);
+  }, [db, userId, sheet, dialog, toasts, toast, update, device]);
 }
 
 export type Store = NonNullable<ReturnType<typeof useStoreValue>>;

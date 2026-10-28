@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHead } from "@/components/Shell";
+import { EditorTabs, PageHead } from "@/components/Shell";
 import { Empty, Icon, Segmented } from "@/components/ui";
 import { diffDays, fmtDate, fmtShort, today } from "@/lib/dates";
 import { cleaningByModel, idx, inP, presetPeriod, type PresetId } from "@/lib/derive";
@@ -19,6 +19,7 @@ export default function CleaningPage() {
 
   return (
     <div className="page">
+      <EditorTabs />
       <PageHead title="Химчистка" sub={`Сейчас в химчистке: ${now.length}`} />
 
       <section className="panel">

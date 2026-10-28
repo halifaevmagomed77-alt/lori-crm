@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHead } from "@/components/Shell";
+import { EditorTabs, PageHead } from "@/components/Shell";
 import { ITEM_TONE } from "@/components/sheets";
 import { Chip, Empty, Icon, Segmented } from "@/components/ui";
 import { fmtShort } from "@/lib/dates";
@@ -30,6 +30,7 @@ export default function DressesPage() {
 
   return (
     <div className="page">
+      <EditorTabs />
       <PageHead
         title="Платья"
         sub={`${counts.free ?? 0} в салоне · ${counts.issued ?? 0} выдано · ${counts.booked ?? 0} забронировано · ${counts.cleaning ?? 0} в химчистке`}
@@ -101,7 +102,7 @@ export default function DressesPage() {
                     </span>
                     <span className="dress-name">{i.model}</span>
                     <span className="dress-meta">
-                      Размер {i.size} · прокат {rub(i.rentPrice)}
+                      Размер {i.size} · аренда {rub(i.rentPrice)}
                     </span>
                     {can("suppliers") && <span className="dress-sup">{I.supplier.get(i.supplierId)?.name ?? "поставщик не указан"}</span>}
                     {booking && (
@@ -117,7 +118,7 @@ export default function DressesPage() {
           ) : db.items.length === 0 ? (
             <Empty
               title="В салоне пока нет платьев"
-              text={can("receiveItems") ? "Нажмите «Поступление», укажите модель, поставщика и цену проката, загрузите фото." : "Платья добавляет владелец."}
+              text={can("receiveItems") ? "Нажмите «Поступление», укажите модель, поставщика и цену аренды, загрузите фото." : "Платья добавляет владелец."}
               action={
                 can("receiveItems") ? (
                   <button type="button" className="btn" onClick={() => openDialog({ kind: "item" })}>

@@ -17,7 +17,7 @@ export const MAX_EMPLOYEES = 30;
 /** login + password — в прототипе хранятся в браузере; в рабочей версии пароль только в виде хэша на сервере */
 export type Staff = { id: ID; name: string; role: Role; active: boolean; phone?: string; login: string; password: string };
 
-/** Табель: верх страницы журнала — кто во сколько пришёл и ушёл */
+/** Табель: кто во сколько пришёл и ушёл (видят владелец и администратор) */
 export type Attendance = { id: ID; staffId: ID; date: DateStr; in?: string; out?: string; dayOff?: boolean };
 
 /* ---------- Платья ---------- */
@@ -98,6 +98,7 @@ export type Booking = {
   refuseReason?: string;
   log: { date: DateStr; text: string }[]; // переносы даты и прочие отметки
   createdBy: ID;
+  notes?: string; // комментарий — консультант может дописывать после сохранения
 };
 
 /* ---------- Деньги ---------- */
@@ -130,6 +131,7 @@ export type Cleaning = { id: ID; itemId: ID; bookingId?: ID; sentAt: DateStr; ba
 export type DB = {
   version: 3;
   demo?: boolean; // в базе пример данных, а не реальная работа салона
+  salonDevice?: string; // устройство салона: только с него консультанты входят и отмечают приход/уход
   staff: Staff[];
   attendance: Attendance[];
   suppliers: Supplier[];

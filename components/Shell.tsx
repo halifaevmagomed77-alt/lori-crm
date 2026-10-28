@@ -11,14 +11,15 @@ import { DialogHost } from "./forms";
 import { SheetHost } from "./sheets";
 import { Icon } from "./ui";
 
-const NAV: { href: string; label: string; icon: string; need?: Permission }[] = [
+type NavItem = { href: string; label: string; short?: string; icon: string; need?: Permission; also?: string[] };
+
+/** Пять блоков по порядку владельца: журнал, книга записей, редактор, табель, отчёты */
+const NAV: NavItem[] = [
   { href: "/", label: "Журнал", icon: "book" },
-  { href: "/brides", label: "Невесты", icon: "clients" },
-  { href: "/records", label: "Записи", icon: "file" },
-  { href: "/dresses", label: "Платья", icon: "dress" },
-  { href: "/cleaning", label: "Химчистка", icon: "drop", need: "cleaning" },
-  { href: "/staff", label: "Сотрудники", icon: "team", need: "manageStaff" },
-  { href: "/reports", label: "Отчёты", icon: "reports", need: "reports" },
+  { href: "/records", label: "Книга записей", short: "Книга записей", icon: "file" },
+  { href: "/brides", label: "Редактор", icon: "edit", also: ["/dresses", "/cleaning"] },
+  { href: "/timesheet", label: "Табель", icon: "clock" },
+  { href: "/reports", label: "Отчёты", icon: "reports", need: "reports", also: ["/staff"] },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -28,10 +29,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   if (!user) return <Login />;
 
   const nav = NAV.filter((n) => !n.need || can(n.need));
-  const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
-  const allowed = nav.some((n) => isActive(n.href));
-  // мобильная панель: 5 главных пунктов, остальное — в «Ещё»
-  const tabs = nav.slice(0, 4);
+  const isActive = (n: NavItem) =>
+    n.href === "/" ? path === "/" : [n.href, ...(n.also ?? [])].some((h) => path.startsWith(h));
+  const allowed =
+    nav.some(isActive) && (!path.startsWith("/staff") || can("manageStaff")) && (!path.startsWith("/cleaning") || can("cleaning"));
+  // для консультанта «Табель» — это его отметка «пришла / ушла»
+  const label = (n: NavItem) => (n.href === "/timesheet" && !can("attendance") ? "Отметка" : n.label);
 
   return (
     <div className="app">
@@ -50,9 +53,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="side-nav" aria-label="Разделы">
           {nav.map((n) => (
-            <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? "page" : undefined}>
+            <Link key={n.href} href={n.href} aria-current={isActive(n) ? "page" : undefined}>
               <Icon name={n.icon} />
-              {n.label}
+              {label(n)}
             </Link>
           ))}
         </nav>
@@ -77,7 +80,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="main" id="main">
-        <DemoBar />
         {allowed ? (
           children
         ) : (
@@ -85,6 +87,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <p className="empty-title">Этот раздел недоступен для роли «{ROLE_LABEL[user.role]}».</p>
           </div>
         )}
+        <DemoBar />
       </main>
 
       <div className="fab-group">
@@ -97,27 +100,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav className="tabbar" aria-label="Разделы">
-        {tabs.map((n) => (
-          <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? "page" : undefined}>
+        {nav.map((n) => (
+          <Link key={n.href} href={n.href} aria-current={isActive(n) ? "page" : undefined}>
             <Icon name={n.icon} size={22} />
-            <span>{n.label}</span>
+            <span>{label(n)}</span>
           </Link>
         ))}
-        {nav.length > 4 && (
-          <details className="tab-more">
-            <summary aria-label="Ещё разделы">
-              <Icon name="plus" size={22} />
-              <span>Ещё</span>
-            </summary>
-            <div className="tab-more-menu">
-              {nav.slice(4).map((n) => (
-                <Link key={n.href} href={n.href} onClick={(e) => (e.currentTarget.closest("details") as HTMLDetailsElement).removeAttribute("open")}>
-                  <Icon name={n.icon} size={18} /> {n.label}
-                </Link>
-              ))}
-            </div>
-          </details>
-        )}
       </nav>
 
       <SheetHost />
@@ -213,5 +201,46 @@ export function PageHead({ title, sub, actions }: { title: React.ReactNode; sub?
       </div>
       {actions && <div className="page-actions">{actions}</div>}
     </header>
+  );
+}
+
+/** Вкладки внутри блока: Редактор → Невесты / Платья / Химчистка; Отчёты → Отчёты / Сотрудники */
+export function SubTabs({ items }: { items: { href: string; label: string; show?: boolean }[] }) {
+  const path = usePathname();
+  const list = items.filter((i) => i.show !== false);
+  if (list.length < 2) return null;
+  return (
+    <nav className="subtabs" aria-label="Подразделы">
+      {list.map((i) => (
+        <Link key={i.href} href={i.href} aria-current={path.startsWith(i.href) ? "page" : undefined}>
+          {i.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+export function EditorTabs() {
+  const { can } = useStore();
+  return (
+    <SubTabs
+      items={[
+        { href: "/brides", label: "Невесты" },
+        { href: "/dresses", label: "Платья" },
+        { href: "/cleaning", label: "Химчистка", show: can("cleaning") },
+      ]}
+    />
+  );
+}
+
+export function OwnerTabs() {
+  const { can } = useStore();
+  return (
+    <SubTabs
+      items={[
+        { href: "/reports", label: "Отчёты", show: can("reports") },
+        { href: "/staff", label: "Сотрудники", show: can("manageStaff") },
+      ]}
+    />
   );
 }

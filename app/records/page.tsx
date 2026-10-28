@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PageHead } from "@/components/Shell";
-import { BookingCard, STATUS_TONE } from "@/components/sheets";
+import { RecordCard, STATUS_TONE } from "@/components/sheets";
 import { Chip, Empty, Icon, Segmented } from "@/components/ui";
 import { addDays, fmtShort, today } from "@/lib/dates";
 import { STATUS_LABEL, idx, isOverdue, rub, shortName } from "@/lib/derive";
@@ -23,8 +23,9 @@ export default function RecordsPage() {
   const [model, setModel] = useState("");
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
-  const [view, setView] = useState<"table" | "book">("table");
-  const [page, setPage] = useState(0);
+  const [view, setView] = useState<"table" | "book">("book");
+  const [shown, setShown] = useState(20);
+  const [q, setQ] = useState("");
 
   const consultants = db.staff.filter((s) => s.role === "employee");
   const models = useMemo(() => [...new Set(db.items.map((i) => i.model))].sort(), [db.items]);
@@ -37,51 +38,72 @@ export default function RecordsPage() {
           ? { from, to }
           : // по дате свадьбы период захватывает и ближайшие будущие свадьбы
             { from: addDays(today(), -Number(range) + 1), to: dateBy === "eventDate" ? addDays(today(), Number(range)) : today() };
-    const q = model.trim().toLowerCase();
+    const mq = model.trim().toLowerCase();
+    const sq = q.trim().toLowerCase();
+    const digits = sq.replace(/\D/g, "");
     return db.bookings
       .filter((b) => {
         const d = b[dateBy];
         if (p && (d < p.from || d > p.to)) return false;
         if (status === "overdue" ? !isOverdue(b) : status !== "all" && b.status !== status) return false;
         if (cons !== "all" && b.consultantId !== cons) return false;
-        if (q && !I.item.get(b.itemId)?.model.toLowerCase().includes(q)) return false;
+        if (mq && !I.item.get(b.itemId)?.model.toLowerCase().includes(mq)) return false;
+        if (sq) {
+          const br = I.bride.get(b.brideId);
+          const hit =
+            br?.name.toLowerCase().includes(sq) ||
+            I.item.get(b.itemId)?.model.toLowerCase().includes(sq) ||
+            String(b.depositNo) === sq ||
+            (digits.length >= 4 && br?.phones.some((p) => p.replace(/\D/g, "").includes(digits)));
+          if (!hit) return false;
+        }
         if (min && b.rentPrice < Number(min)) return false;
         if (max && b.rentPrice > Number(max)) return false;
         return true;
       })
       .sort((a, b) => b[dateBy].localeCompare(a[dateBy]) || b.depositNo - a.depositNo);
-  }, [db.bookings, range, from, to, dateBy, status, cons, model, min, max, I]);
+  }, [db.bookings, range, from, to, dateBy, status, cons, model, min, max, q, I]);
 
   const sum = list.reduce((s, b) => s + b.rentPrice, 0);
   const deposits = list.reduce((s, b) => s + b.deposit, 0);
-  const current = list[Math.min(page, Math.max(0, list.length - 1))];
 
   return (
-    <div className="page">
+    <div className="page page-book">
       <PageHead
-        title="Записи"
+        title="Книга записей"
         sub={
           <>
-            {list.length} договоров
-            {can("reports") && ` · прокат ${rub(sum)} · залоги ${rub(deposits)}`}
+            {list.length} записей
+            {can("reports") && ` · аренда ${rub(sum)} · залоги ${rub(deposits)}`}
           </>
         }
         actions={
           <Segmented
             label="Вид"
             value={view}
-            onChange={(v) => {
-              setView(v);
-              setPage(0);
-            }}
+            onChange={setView}
             options={[
-              { value: "table", label: "Список" },
-              { value: "book", label: "Книжка" },
+              { value: "book", label: "Карточки" },
+              { value: "table", label: "Таблица" },
             ]}
           />
         }
       />
 
+      <div className="search-input book-search">
+        <Icon name="search" size={18} />
+        <input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setShown(20);
+          }}
+          placeholder="Имя, телефон, платье или № договора"
+          aria-label="Поиск по книге записей"
+        />
+      </div>
+      <details className="details filters-box">
+        <summary>Фильтры</summary>
       <div className="filters">
         <label className="field">
           <span className="field-label">Период</span>
@@ -144,13 +166,14 @@ export default function RecordsPage() {
           </datalist>
         </label>
         <label className="field field-sum">
-          <span className="field-label">Сумма проката, ₽</span>
+          <span className="field-label">Сумма аренды, ₽</span>
           <span className="sum-range">
             <input type="number" inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} placeholder="от" aria-label="Сумма от" />
             <input type="number" inputMode="numeric" value={max} onChange={(e) => setMax(e.target.value)} placeholder="до" aria-label="Сумма до" />
           </span>
         </label>
       </div>
+      </details>
 
       {list.length === 0 ? (
         <Empty title="Записей с такими условиями нет" text="Расширьте период или сбросьте фильтры." />
@@ -162,10 +185,10 @@ export default function RecordsPage() {
                 <th scope="col">№</th>
                 <th scope="col">Невеста</th>
                 <th scope="col">Платье</th>
-                <th scope="col">Конс.</th>
+                <th scope="col">Консультант</th>
                 <th scope="col">Записана</th>
                 <th scope="col">Свадьба</th>
-                <th scope="col" className="num">Сумма</th>
+                <th scope="col" className="num">Аренда</th>
                 <th scope="col" className="num">Залог</th>
                 <th scope="col">Статус</th>
               </tr>
@@ -180,10 +203,10 @@ export default function RecordsPage() {
                     </button>
                   </td>
                   <td data-label="Платье">{I.item.get(b.itemId)?.model}</td>
-                  <td data-label="Конс.">{I.staff.get(b.consultantId)?.name}</td>
+                  <td data-label="Консультант">{I.staff.get(b.consultantId)?.name}</td>
                   <td data-label="Записана">{fmtShort(b.createdAt)}</td>
                   <td data-label="Свадьба">{fmtShort(b.eventDate)}</td>
-                  <td data-label="Сумма" className="num">{rub(b.rentPrice)}</td>
+                  <td data-label="Аренда" className="num">{rub(b.rentPrice)}</td>
                   <td data-label="Залог" className="num">{rub(b.deposit)}</td>
                   <td data-label="Статус">
                     <Chip tone={isOverdue(b) ? "bad" : STATUS_TONE[b.status]}>{isOverdue(b) ? "Просрочен" : STATUS_LABEL[b.status]}</Chip>
@@ -195,22 +218,16 @@ export default function RecordsPage() {
           {list.length > 200 && <p className="muted small table-more">Показаны первые 200. Уточните фильтры.</p>}
         </div>
       ) : (
-        current && (
-          <div className="book">
-            <div className="book-nav">
-              <button type="button" className="icon-btn" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} aria-label="Предыдущая запись">
-                <Icon name="chevronL" />
-              </button>
-              <span className="tabular">
-                {Math.min(page, list.length - 1) + 1} из {list.length}
-              </span>
-              <button type="button" className="icon-btn" disabled={page >= list.length - 1} onClick={() => setPage((p) => Math.min(list.length - 1, p + 1))} aria-label="Следующая запись">
-                <Icon name="chevronR" />
-              </button>
-            </div>
-            <BookingCard key={current.id} b={current} />
-          </div>
-        )
+        <div className="record-book">
+          {list.slice(0, shown).map((b) => (
+            <RecordCard key={b.id} b={b} />
+          ))}
+          {list.length > shown && (
+            <button type="button" className="btn btn-ghost btn-block" onClick={() => setShown((n) => n + 20)}>
+              Показать ещё ({list.length - shown})
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

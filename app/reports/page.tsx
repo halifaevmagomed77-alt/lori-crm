@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BarChart } from "@/components/BarChart";
-import { PageHead } from "@/components/Shell";
+import { OwnerTabs, PageHead } from "@/components/Shell";
 import { Chip, Empty, Icon, Segmented } from "@/components/ui";
 import { fmtDate, fmtShort, today } from "@/lib/dates";
 import {
@@ -42,13 +42,29 @@ const PRESETS: { value: PresetId; label: string }[] = [
   { value: "custom", label: "Свой период" },
 ];
 
-function Tile({ label, value, share, was }: { label: string; value: number | string; share?: string; was?: number | string }) {
+function Line({
+  label,
+  value,
+  share,
+  was,
+  strong,
+  alert,
+}: {
+  label: string;
+  value: number | string;
+  share?: string;
+  was?: number | string;
+  strong?: boolean;
+  alert?: boolean;
+}) {
   return (
-    <div className="tile">
-      <span className="tile-label">{label}</span>
-      <span className="tile-value">{value}</span>
-      {share && <span className="tile-share">{share}</span>}
-      {was !== undefined && <span className="delta">в прошлом периоде {was}</span>}
+    <div className={`rline${strong ? " is-strong" : ""}${alert ? " is-alert" : ""}`}>
+      <span className="rline-label">{label}</span>
+      <span className="rline-value">{value}</span>
+      <span className="rline-note">
+        {share}
+        {was !== undefined && <span className="rline-was">{share ? " · " : ""}было {was}</span>}
+      </span>
     </div>
   );
 }
@@ -81,6 +97,7 @@ export default function ReportsPage() {
 
   return (
     <div className="page">
+      <OwnerTabs />
       <PageHead title="Отчёты" sub={valid ? `${fmtDate(p.from)} — ${fmtDate(p.to)}` : "Проверьте даты"} />
 
       <div className="filters">
@@ -99,40 +116,27 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* ---- Воронка в процентах ---- */}
-      <p className="headline">
-        Из <strong>{f.visits}</strong> невест, зашедших в салон, записались (договор на залог) <strong>{f.records}</strong> —{" "}
-        <strong>{pct(f.records, f.visits)}</strong>. Отказались <strong>{f.refusals}</strong>, выдано платьев <strong>{f.issued}</strong>.
-      </p>
-      <section className="tiles tiles-6" aria-label="Воронка">
-        <Tile label="Зашли" value={f.visits} was={pf.visits} />
-        <Tile label="Примерили" value={f.tried} share={`${pct(f.tried, f.visits)} от зашедших`} was={pf.tried} />
-        <Tile label="Возвратные" value={f.returning} share={`${pct(f.returning, f.visits)} от зашедших`} was={pf.returning} />
-        <Tile label="Записались" value={f.records} share={`${pct(f.records, f.visits)} от зашедших`} was={`${pf.records} · ${pct(pf.records, pf.visits)}`} />
-        <Tile label="Отказы" value={f.refusals} share={`${pct(f.refusals, f.records)} от записей`} was={pf.refusals} />
-        <Tile label="Выдано платьев" value={f.issued} was={pf.issued} />
+      {/* ---- Воронка: каждая строка — один показатель ---- */}
+      <section className="report-lines" aria-label="Невесты за период">
+        <h2 className="lines-title">Невесты</h2>
+        <Line label="Зашли" value={f.visits} was={pf.visits} />
+        <Line label="Примерка" value={f.tried} share={`${pct(f.tried, f.visits)} от зашедших`} was={pf.tried} />
+        <Line label="Возвратные" value={f.returning} share={`${pct(f.returning, f.visits)} от зашедших`} was={pf.returning} />
+        <Line label="Запись" value={f.records} share={`${pct(f.records, f.visits)} от зашедших`} was={pf.records} strong />
+        <Line label="Отказ" value={f.refusals} share={`${pct(f.refusals, f.records)} от записей`} was={pf.refusals} />
+        <Line label="Выдано" value={f.issued} was={pf.issued} />
       </section>
 
-      {/* ---- Деньги ---- */}
-      <section className="money-strip" aria-label="Деньги">
-        <div>
-          <span className="tile-label">Получено за прокат</span>
-          <strong>{rub(m.rent)}</strong>
-        </div>
-        <div>
-          <span className="tile-label">Штрафы невест — отдельно</span>
-          <strong>{rub(m.fines)}</strong>
-        </div>
-        <div>
-          <span className="tile-label">Залоги по отказам остались салону</span>
-          <strong>{rub(ref.depositKept)}</strong>
-        </div>
-        <div className={m.unconfirmed.length ? "is-alert" : undefined}>
-          <span className="tile-label">Ждут вашего подтверждения</span>
-          <strong>
-            {m.unconfirmed.length} на {rub(m.unconfirmedSum)}
-          </strong>
-        </div>
+      {/* ---- Деньги: отдельным цветом, тоже построчно ---- */}
+      <section className="report-lines money-lines" aria-label="Деньги за период">
+        <h2 className="lines-title">Деньги</h2>
+        <Line label="Залог" value={rub(m.deposit)} share="внесено по договорам на залог" />
+        <Line label="Аренда" value={rub(m.rentFull)} share="полная сумма выданных платьев" />
+        <Line label="Доп" value={rub(m.extra)} share="фотосессия, серьги, фата и др." />
+        <Line label="Штрафы" value={rub(m.fines)} share="только штрафы невест" />
+        <Line label="Отказы" value={rub(ref.depositKept)} share="залоги, оставшиеся салону" />
+        <Line label="Получено" value={rub(m.received)} share="всего поступило в кассу" strong />
+        {m.unconfirmed.length > 0 && <Line label="Ждут" value={rub(m.unconfirmedSum)} share={`${m.unconfirmed.length} оплат ждут вашего подтверждения`} alert />}
       </section>
       {m.unconfirmed.length > 0 && (
         <details className="panel panel-tight">
@@ -287,7 +291,7 @@ export default function ReportsPage() {
           ) : (
             <Empty title="Выдач за период нет" />
           )}
-          <p className="muted small">Число — выдано за период, справа — сумма проката.</p>
+          <p className="muted small">Число — выдано за период, справа — сумма аренды.</p>
         </section>
 
         {/* ---- Отказы ---- */}
@@ -297,7 +301,7 @@ export default function ReportsPage() {
             <span className="panel-hint">{ref.count} за период</span>
           </div>
           <p className="small">
-            Сумма платьев (прокат): <strong>{rub(ref.rentLost)}</strong> · залоги, оставшиеся салону: <strong>{rub(ref.depositKept)}</strong>
+            Сумма аренды платьев: <strong>{rub(ref.rentLost)}</strong> · залоги, оставшиеся салону: <strong>{rub(ref.depositKept)}</strong>
           </p>
           {ref.list.length ? (
             <ul className="entries">
@@ -431,7 +435,7 @@ export default function ReportsPage() {
                 </div>
               ))}
             </div>
-            <p className="muted small">«Окупилось» — выручка проката за период к цене закупки этого экземпляра.</p>
+            <p className="muted small">«Окупилось» — выручка аренды за период к цене закупки этого экземпляра.</p>
           </>
         )}
       </section>

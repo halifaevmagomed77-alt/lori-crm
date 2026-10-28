@@ -678,3 +678,150 @@ button.mini-row:hover { background: var(--sand); }
 .empty-db span { flex: 1 1 320px; }
 .callout textarea { width: 100%; margin-top: 8px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px; font-size: 13px; }
 .callout-info { flex-wrap: wrap; }
+
+/* =========================================================
+   v4 — замечания владельца: мобильная версия, 5 блоков
+   ========================================================= */
+
+/* Дата — самая верхняя строка журнала, прилипает под шапкой */
+.page-journal { padding-top: 0 !important; }
+.date-bar {
+  position: sticky; top: 0; z-index: 15;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  margin: 0 calc(-1 * clamp(16px, 3vw, 40px)) 14px; padding: 10px clamp(16px, 3vw, 40px);
+  background: rgba(250, 248, 245, .96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+}
+.date-bar-inline { position: static; margin: 0 0 12px; padding: 0; background: none; border: 0; backdrop-filter: none; }
+.date-pick { position: relative; display: grid; justify-items: center; min-width: 170px; padding: 2px 10px; border-radius: 10px; cursor: pointer; }
+.date-pick:hover { background: var(--sand); }
+.date-big { font-family: var(--serif); font-size: 26px; line-height: 1.15; color: var(--ink); }
+.date-wd { font-size: 13px; color: var(--stone); }
+.date-pick input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.date-today { margin-left: 6px; }
+@media (max-width: 900px) { .date-bar { top: var(--top); } }
+
+/* Подразделы внутри блока */
+.subtabs { display: flex; gap: 4px; margin-bottom: 14px; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.subtabs a { flex: none; padding: 10px 14px; text-decoration: none; font-weight: 600; font-size: 14px; color: var(--stone); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.subtabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* Деньги дня в журнале — отдельный цвет, только владелец */
+.ledger-money { margin-top: 4px; padding: 6px 12px 2px; border: 0; border-radius: 10px; background: #f3f8ef; box-shadow: inset 0 0 0 1px #d6e6cc; }
+.ledger-money .ledger-row { border-bottom-color: #d6e6cc; }
+.ledger-money .ledger-row:last-child { border-bottom: 0; }
+.ledger-money .ledger-label { color: #2f6b3f; border-right-color: #9cbf8c; }
+.money-head { font-size: 12px; font-weight: 700; letter-spacing: .03em; color: #2f6b3f; text-transform: uppercase; padding: 4px 0; }
+.money-val { display: inline-flex; gap: 8px; align-items: baseline; }
+.money-val strong { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* Книга записей: карточка — половина экрана телефона */
+.book-search { margin-bottom: 10px; }
+.filters-box { margin-bottom: 14px; background: var(--paper); }
+.filters-box .filters { margin: 0; }
+.record-book { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.record-card {
+  display: grid; gap: 6px; align-content: start; width: 100%; text-align: left; color: var(--ink-blue);
+  padding: 12px 14px !important; border-radius: 6px 12px 12px 6px; font: inherit; cursor: pointer;
+}
+.record-card:hover { border-color: var(--line-strong); }
+.rc-head { display: flex; align-items: center; gap: 10px; }
+.rc-no { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rc-date { font-size: 13px; color: var(--stone); margin-right: auto; }
+.rc-name { font-family: var(--serif); font-size: 21px; line-height: 1.15; color: var(--ink); }
+.rc-lines { display: grid; }
+.rc-line { display: grid; grid-template-columns: 96px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid rgba(70, 110, 170, .14); font-size: 14px; }
+.rc-line i, .rc-money i { font-family: var(--serif); color: var(--ink-blue); opacity: .85; }
+.rc-line b { font-weight: 500; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-money { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-top: 4px; }
+.rc-money > span { display: grid; font-size: 12px; }
+.rc-money b { font-size: 14px; color: var(--ink-red); font-variant-numeric: tabular-nums; font-weight: 600; }
+.rc-note { font-size: 13px; color: var(--ink-2); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) {
+  .record-book { grid-template-columns: 1fr; gap: 10px; }
+  /* две карточки на экран телефона */
+  .record-card { min-height: calc((100dvh - var(--top) - var(--tab) - 170px) / 2); }
+}
+
+.entry-note { font-size: 14px; color: var(--ink-2); font-style: italic; padding: 8px 10px; background: var(--sand); border-radius: 8px; }
+
+/* Отметка консультанта */
+.checkin { display: grid; gap: 16px; margin-bottom: 16px; }
+.checkin-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.checkin-cell { display: grid; justify-items: center; gap: 2px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,.85); border: 1px solid var(--line); }
+.checkin-label { font-family: var(--serif); font-style: italic; color: var(--ink-blue); font-size: 18px; }
+.checkin-time { font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.checkin-btn { min-height: 56px; font-size: 17px; }
+.checkin-history { margin-bottom: 16px; }
+.timesheet { margin-bottom: 16px; display: grid; gap: 10px; }
+.salon-device { margin-top: 16px; display: grid; gap: 10px; }
+.salon-device .inline-row { flex-wrap: wrap; }
+
+/* Отчёты построчно */
+.report-lines { display: grid; margin: 0 0 16px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--paper); }
+.lines-title { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stone); padding: 10px 16px 6px; }
+.rline { display: grid; grid-template-columns: 110px auto 1fr; gap: 6px 14px; align-items: baseline; padding: 10px 16px; border-top: 1px solid var(--line); }
+.rline-label { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--ink-blue); }
+.rline-value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rline-note { font-size: 13px; color: var(--stone); }
+.rline-was { white-space: nowrap; }
+.rline.is-strong { background: #f4f1fb; }
+.money-lines { background: #f3f8ef; border-color: #d6e6cc; }
+.money-lines .lines-title { color: #2f6b3f; }
+.money-lines .rline { border-top-color: #d6e6cc; }
+.money-lines .rline-label { color: #2f6b3f; }
+.money-lines .rline.is-strong { background: #e4f0dc; }
+.money-lines .rline.is-alert { background: var(--bad-bg); }
+.money-lines .rline.is-alert .rline-label { color: var(--bad); }
+@media (max-width: 640px) {
+  .rline { grid-template-columns: 96px 1fr; padding: 8px 14px; }
+  .rline-note { grid-column: 2; }
+  .rline-value { font-size: 21px; }
+}
+
+/* Мобильный журнал: метка и значение в одну строку — всё помещается на экран */
+@media (max-width: 640px) {
+  .page-journal .paper { padding: 12px; }
+  .sheet-day { gap: 12px; }
+  .ledger-row > summary, div.ledger-row { grid-template-columns: 104px 1fr; gap: 8px; min-height: 42px; padding: 4px 0; }
+  .ledger-label { font-size: 16px; border-right: 1.5px solid var(--ink-2); padding-right: 8px; }
+  .ledger-money .ledger-label { border-right-color: #9cbf8c; }
+  .who { padding: 2px 8px; font-size: 12px; }
+  .model-link { padding: 2px 8px; font-size: 12px; }
+  .tally .tally-total { min-width: 24px; height: 24px; font-size: 13px; }
+  .date-big { font-size: 22px; }
+}
+
+/* Пять вкладок внизу, подписи в две строки при нехватке места */
+@media (max-width: 900px) {
+  .tabbar a { padding: 0 2px; text-align: center; line-height: 1.15; }
+  .tabbar a span { font-size: 11px; }
+}
+
+/* Плашка демо внизу страницы, чтобы дата была самой верхней строкой */
+.main > .demo-bar { margin-top: 8px; border-top: 1px solid #f0dfb8; border-bottom: 0; }
+@media (max-width: 640px) {
+  .ledger-row > summary, div.ledger-row { grid-template-columns: 116px 1fr; }
+  .ledger-label { font-size: 15.5px; }
+  details.ledger-row > summary .ledger-label::after { margin-left: 4px; }
+  .ledger-body .entry-li { flex-wrap: wrap; }
+  .ledger-body .entry-li > .btn, .ledger-body .entry-li > .chip { margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .rline { grid-template-columns: 104px auto 1fr; padding: 6px 14px; align-items: center; }
+  .rline-note { grid-column: auto; font-size: 11.5px; line-height: 1.25; }
+  .rline-value { font-size: 18px; }
+  .rline-label { font-size: 16px; }
+  /* Книга записей: компактная шапка, чтобы на экран помещались две карточки */
+  .page-book .page-head { margin-bottom: 10px; }
+  .page-book .page-title { font-size: 26px; }
+  .page-book .page-sub { font-size: 13px; margin-top: 2px; }
+  .page-book .page-actions { display: none; }
+  .page-book .filters-box { padding: 8px 12px; }
+  .record-card { min-height: 0; gap: 4px; }
+  .rc-name { font-size: 19px; }
+}
+@media (max-width: 640px) {
+  .timesheet .attendance th:first-child { width: auto; }
+  .timesheet .time-cell { width: 78px; padding: 2px 0; }
+  .timesheet .attendance th, .timesheet .attendance td { padding: 6px 3px; }
+}

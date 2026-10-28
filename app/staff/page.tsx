@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHead } from "@/components/Shell";
+import { OwnerTabs, PageHead } from "@/components/Shell";
 import { Chip, Icon } from "@/components/ui";
 import { addDays, today } from "@/lib/dates";
 import { funnel, pct } from "@/lib/derive";
@@ -20,6 +20,7 @@ export default function StaffPage() {
 
   return (
     <div className="page">
+      <OwnerTabs />
       <PageHead
         title="Сотрудники"
         sub={`Консультантов: ${employees} из ${MAX_EMPLOYEES}`}
@@ -31,7 +32,6 @@ export default function StaffPage() {
       />
       <p className="muted small page-intro">
         Нажмите на сотрудника, чтобы сменить имя, логин или пароль, а также удалить его.
-        {!isOwner && " Администратор управляет учётными записями консультантов."}
       </p>
       <div className="table-wrap">
         <table className="table">
@@ -53,7 +53,7 @@ export default function StaffPage() {
               .map((s) => {
                 const shifts = db.attendance.filter((a) => a.staffId === s.id && a.in && a.date >= month.from).length;
                 const f = s.role === "employee" ? funnel(db, month, s.id) : null;
-                const editable = isOwner || s.role === "employee";
+                const editable = isOwner;
                 return (
                   <tr key={s.id} className={editable ? "tr-click" : undefined} onClick={() => editable && openDialog({ kind: "staff", staff: s })}>
                     <td>

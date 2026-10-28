@@ -19,6 +19,7 @@ export function shortName(full: string) {
 
 type Index = {
   bride: Map<string, DB["brides"][number]>;
+  booking: Map<string, Booking>;
   item: Map<string, DressItem>;
   staff: Map<string, Staff>;
   supplier: Map<string, DB["suppliers"][number]>;
@@ -42,6 +43,7 @@ export function idx(db: DB): Index {
   };
   i = {
     bride: new Map(db.brides.map((b) => [b.id, b])),
+    booking: new Map(db.bookings.map((b) => [b.id, b])),
     item: new Map(db.items.map((x) => [x.id, x])),
     staff: new Map(db.staff.map((s) => [s.id, s])),
     supplier: new Map(db.suppliers.map((s) => [s.id, s])),
@@ -168,15 +170,21 @@ export function byConsultant(db: DB, p: Period) {
     .sort((a, b) => b.records - a.records || b.visits - a.visits);
 }
 
+/** Деньги за период: залог, полная аренда выданных платьев, допы, штрафы невест — в таком порядке */
 export function money(db: DB, p: Period) {
   const ps = db.payments.filter((x) => inP(x.date, p));
-  const rent = ps.filter((x) => x.kind !== "fine");
+  const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+  const issued = db.bookings.filter((b) => inP(b.issuedAt, p));
   const fines = ps.filter((x) => x.kind === "fine");
   return {
-    rent: rent.reduce((s, x) => s + x.amount, 0),
-    fines: fines.reduce((s, x) => s + x.amount, 0),
+    deposit: sum(ps.filter((x) => x.kind === "deposit").map((x) => x.amount)),
+    rentFull: sum(issued.map((b) => b.rentPrice)),
+    extra: sum(issued.map((b) => b.extra)) + sum(ps.filter((x) => x.kind === "extra").map((x) => x.amount)),
+    rent: sum(ps.filter((x) => x.kind !== "fine").map((x) => x.amount)),
+    fines: sum(fines.map((x) => x.amount)),
+    received: sum(ps.map((x) => x.amount)),
     unconfirmed: ps.filter((x) => !x.confirmedAt),
-    unconfirmedSum: ps.filter((x) => !x.confirmedAt).reduce((s, x) => s + x.amount, 0),
+    unconfirmedSum: sum(ps.filter((x) => !x.confirmedAt).map((x) => x.amount)),
     count: ps.length,
   };
 }

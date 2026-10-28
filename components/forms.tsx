@@ -38,7 +38,38 @@ export function DialogHost() {
       return <SupplierForm key="su" supplier={dialog.supplier} onClose={close} />;
     case "feedback":
       return <FeedbackForm key="fb" onClose={close} />;
+    case "comment":
+      return <CommentForm key="cm" target={dialog.target} id={dialog.id} onClose={close} />;
   }
+}
+
+/* ---------- Комментарий: консультант может дописать после сохранения ---------- */
+
+function CommentForm({ target, id, onClose }: { target: "bride" | "booking"; id: string; onClose: () => void }) {
+  const { db, saveComment, toast } = useStore();
+  const current = target === "bride" ? db.brides.find((b) => b.id === id)?.notes : db.bookings.find((b) => b.id === id)?.notes;
+  const [text, setText] = useState(current ?? "");
+  return (
+    <Modal
+      title="Комментарий"
+      onClose={onClose}
+      footer={
+        <Foot
+          onClose={onClose}
+          label="Сохранить"
+          onSubmit={() => {
+            saveComment(target, id, text.trim());
+            toast("Комментарий сохранён");
+            onClose();
+          }}
+        />
+      }
+    >
+      <Field label={target === "bride" ? "Комментарий к невесте" : "Комментарий к записи"}>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} autoFocus />
+      </Field>
+    </Modal>
+  );
 }
 
 const nowTime = () => {
@@ -195,7 +226,7 @@ function ItemPicker({
           );
         })}
         {list.length === 0 && (
-          <li className="muted small">{db.items.length ? "Ничего не нашлось" : "Платьев пока нет — владелец добавляет их в разделе «Платья» → «Поступление»"}</li>
+          <li className="muted small">{db.items.length ? "Ничего не нашлось" : "Платьев пока нет — владелец добавляет их в «Редактор → Платья» → «Поступление»"}</li>
         )}
       </ul>
     </div>
@@ -513,13 +544,13 @@ function BookingForm({
         </p>
       )}
       <div className="grid-3">
-        <Field label="Сумма проката, ₽" error={tried && !rent ? "Укажите сумму" : undefined}>
+        <Field label="Аренда, ₽" error={tried && !rent ? "Укажите сумму" : undefined}>
           <input type="number" inputMode="numeric" value={rent} onChange={(e) => setRent(e.target.value)} />
         </Field>
         <Field label="Залог, ₽" hint="Не возвращается при отказе" error={tried && !deposit ? "Укажите залог" : undefined}>
           <input type="number" inputMode="numeric" value={deposit} onChange={(e) => setDeposit(e.target.value)} disabled={!!booking && !can("editAll")} />
         </Field>
-        <Field label="Доп, ₽">
+        <Field label="Доп, ₽" hint="Фотосессия, серьги, фата…">
           <input type="number" inputMode="numeric" value={extra} onChange={(e) => setExtra(e.target.value)} />
         </Field>
       </div>
@@ -641,7 +672,7 @@ function ReturnForm({ bookingId, onClose }: { bookingId: string; onClose: () => 
     >
       {late > 0 && (
         <p className="callout callout-bad">
-          <Icon name="alert" size={18} /> Возврат просрочен на {late} дн. По договору — 10% от проката за каждые сутки.
+          <Icon name="alert" size={18} /> Возврат просрочен на {late} дн. По договору — 10% от суммы аренды за каждые сутки.
         </p>
       )}
       <label className="check">
@@ -705,7 +736,7 @@ function RefuseForm({ bookingId, onClose }: { bookingId: string; onClose: () => 
       }
     >
       <p>
-        Сумма проката {rub(b.rentPrice)}. Залог <strong>{rub(b.deposit)}</strong> не возвращается и остаётся салону по договору. Платье снова станет свободным на эти даты.
+        Сумма аренды {rub(b.rentPrice)}. Залог <strong>{rub(b.deposit)}</strong> не возвращается и остаётся салону по договору. Платье снова станет свободным на эти даты.
       </p>
       <Field label="Причина">
         <select value={reason} onChange={(e) => setReason(e.target.value)}>
@@ -875,7 +906,7 @@ function BrideForm({ bride, onClose }: { bride?: Bride; onClose: () => void }) {
           </select>
         </Field>
       </div>
-      <Field label="Заметки">
+      <Field label="Комментарий">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
       </Field>
     </Modal>
@@ -1054,7 +1085,7 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
         <Field label="Стоимость платья, ₽" hint="Пишется в договоре">
           <input type="number" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} />
         </Field>
-        <Field label="Цена проката, ₽" error={tried && !rent ? "Укажите цену" : undefined}>
+        <Field label="Цена аренды, ₽" error={tried && !rent ? "Укажите цену" : undefined}>
           <input type="number" inputMode="numeric" value={rent} onChange={(e) => setRent(e.target.value)} />
         </Field>
       </div>

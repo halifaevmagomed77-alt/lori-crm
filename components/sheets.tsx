@@ -76,15 +76,15 @@ function PayLine({ p }: { p: Payment }) {
 }
 
 export function BookingCard({ b }: { b: Booking }) {
-  const { db, can, openDialog, open, user } = useStore();
+  const { db, can, openDialog, open } = useStore();
   const I = idx(db);
   const bride = I.bride.get(b.brideId);
   const item = I.item.get(b.itemId);
   const cons = I.staff.get(b.consultantId);
   const money = paid(db, b);
   const fines = money.payments.filter((p) => p.kind === "fine");
-  const mineToday = b.createdBy === user?.id && b.createdAt === today();
-  const canEdit = can("editAll") || mineToday;
+  // после сохранения консультант меняет только комментарий; запись правят администратор и владелец
+  const canEdit = can("editAll");
   const overdue = isOverdue(b);
 
   return (
@@ -137,12 +137,12 @@ export function BookingCard({ b }: { b: Booking }) {
       <div className="entry-grid">
         <dl className="entry-lines">
           <div className="line">
-            <dt>Сумма</dt>
-            <dd className="tabular">{rub(b.rentPrice)}</dd>
-          </div>
-          <div className="line">
             <dt>Залог</dt>
             <dd className="tabular">{rub(b.deposit)}</dd>
+          </div>
+          <div className="line">
+            <dt>Аренда</dt>
+            <dd className="tabular">{rub(b.rentPrice)}</dd>
           </div>
           <div className="line">
             <dt>Доп</dt>
@@ -165,7 +165,7 @@ export function BookingCard({ b }: { b: Booking }) {
             </dd>
           </div>
           <div className="line">
-            <dt>Конс.</dt>
+            <dt>Консультант</dt>
             <dd>{cons?.name ?? "—"}</dd>
           </div>
           <div className="line">
@@ -191,6 +191,8 @@ export function BookingCard({ b }: { b: Booking }) {
           ))}
         </ul>
       )}
+
+      {b.notes && <p className="entry-note">Комментарий: {b.notes}</p>}
 
       {b.status === "refused" && (
         <p className="entry-refuse">
@@ -241,6 +243,9 @@ export function BookingCard({ b }: { b: Booking }) {
             Штраф
           </button>
         )}
+        <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "comment", target: "booking", id: b.id })}>
+          <Icon name="chat" size={16} /> Комментарий
+        </button>
         {b.status === "booked" && canEdit && (
           <>
             <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "move", bookingId: b.id })}>
@@ -261,10 +266,74 @@ export function BookingCard({ b }: { b: Booking }) {
   );
 }
 
+/* ---------- Карточка в книге записей: половина экрана телефона ---------- */
+
+export function RecordCard({ b }: { b: Booking }) {
+  const { db, open } = useStore();
+  const I = idx(db);
+  const bride = I.bride.get(b.brideId);
+  const item = I.item.get(b.itemId);
+  const overdue = isOverdue(b);
+  const money = paid(db, b);
+  const fines = money.payments.filter((p) => p.kind === "fine").reduce((s, p) => s + p.amount, 0);
+  return (
+    <button type="button" className="paper record-card" onClick={() => open({ kind: "booking", id: b.id })}>
+      <span className="rc-head">
+        <span className="rc-no">№ {b.depositNo}</span>
+        <span className="rc-date">{fmtDate(b.createdAt)}</span>
+        <Chip tone={overdue ? "bad" : STATUS_TONE[b.status]}>{overdue ? "Просрочен" : STATUS_LABEL[b.status]}</Chip>
+      </span>
+      <span className="rc-name">{bride?.name ?? "—"}</span>
+      <span className="rc-lines">
+        <span className="rc-line">
+          <i>Платье</i>
+          <b>
+            {item?.model ?? "—"}
+            {item && <span className="muted"> · {item.size}</span>}
+          </b>
+        </span>
+        <span className="rc-line">
+          <i>Тел</i>
+          <b className="tabular">{bride?.phones[0] ?? "—"}</b>
+        </span>
+        <span className="rc-line">
+          <i>Свадьба</i>
+          <b>
+            {fmtShort(b.eventDate)} · выдача {fmtShort(b.issueDate)}
+          </b>
+        </span>
+        <span className="rc-line">
+          <i>Консультант</i>
+          <b>{I.staff.get(b.consultantId)?.name ?? "—"}</b>
+        </span>
+      </span>
+      <span className="rc-money">
+        <span>
+          <i>Залог</i>
+          <b>{rub(b.deposit)}</b>
+        </span>
+        <span>
+          <i>Аренда</i>
+          <b>{rub(b.rentPrice)}</b>
+        </span>
+        <span>
+          <i>Доп</i>
+          <b>{b.extra ? rub(b.extra) : "—"}</b>
+        </span>
+        <span>
+          <i>Штраф</i>
+          <b>{fines ? rub(fines) : "—"}</b>
+        </span>
+      </span>
+      {b.notes && <span className="rc-note">{b.notes}</span>}
+    </button>
+  );
+}
+
 /* ---------- Невеста ---------- */
 
 function BrideCard({ b }: { b: Bride }) {
-  const { db, open, openDialog } = useStore();
+  const { db, open, openDialog, can } = useStore();
   const I = idx(db);
   const visits = db.visits.filter((v) => v.brideId === b.id).sort((x, y) => (y.date + y.time).localeCompare(x.date + x.time));
   const bookings = db.bookings.filter((x) => x.brideId === b.id).sort((x, y) => y.createdAt.localeCompare(x.createdAt));
@@ -282,7 +351,7 @@ function BrideCard({ b }: { b: Bride }) {
           <dd className="tabular">{b.phones.join(", ")}</dd>
         </div>
         <div className="line">
-          <dt>Конс.</dt>
+          <dt>Консультант</dt>
           <dd>
             {cons?.name ?? "—"} <span className="muted">· встречает при каждом визите</span>
           </dd>
@@ -297,7 +366,7 @@ function BrideCard({ b }: { b: Bride }) {
         </div>
         {b.notes && (
           <div className="line">
-            <dt>Заметки</dt>
+            <dt>Комментарий</dt>
             <dd>{b.notes}</dd>
           </div>
         )}
@@ -310,10 +379,17 @@ function BrideCard({ b }: { b: Bride }) {
         <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "booking", brideId: b.id })}>
           Запись (договор на залог)
         </button>
-        <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "bride", bride: b })}>
-          <Icon name="edit" size={16} /> Изменить
-        </button>
+        {can("editAll") ? (
+          <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "bride", bride: b })}>
+            <Icon name="edit" size={16} /> Изменить
+          </button>
+        ) : (
+          <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "comment", target: "bride", id: b.id })}>
+            <Icon name="chat" size={16} /> Комментарий
+          </button>
+        )}
       </div>
+      {!can("editAll") && <p className="muted small">Карточку после сохранения меняют администратор и владелец. Вы можете дописать комментарий.</p>}
 
       <h3 className="section-label">Договоры</h3>
       {bookings.length ? (
@@ -384,7 +460,7 @@ function ItemCard({ it }: { it: DressItem }) {
           <dd>{it.size}</dd>
         </div>
         <div className="line">
-          <dt>Прокат</dt>
+          <dt>Аренда</dt>
           <dd className="tabular">{rub(it.rentPrice)}</dd>
         </div>
         <div className="line">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PageHead } from "@/components/Shell";
+import { EditorTabs, PageHead } from "@/components/Shell";
 import { STATUS_TONE } from "@/components/sheets";
 import { Chip, Empty, Icon } from "@/components/ui";
 import { fmtShort, relDay, today } from "@/lib/dates";
@@ -45,9 +45,10 @@ export default function BridesPage() {
 
   return (
     <div className="page">
+      <EditorTabs />
       <PageHead
-        title="Невесты"
-        sub={`${db.brides.length} в базе`}
+        title="Редактор"
+        sub={`Невест в базе: ${db.brides.length}. Нажмите на невесту, чтобы открыть карточку и записи.`}
         actions={
           <button type="button" className="btn" onClick={() => openDialog({ kind: "visit" })}>
             <Icon name="door" size={18} /> Зашла невеста
