@@ -18,7 +18,7 @@ const NAV: NavItem[] = [
   { href: "/", label: "Журнал", icon: "book" },
   { href: "/records", label: "Книга записей", short: "Книга записей", icon: "file" },
   { href: "/brides", label: "Редактор", icon: "edit", also: ["/dresses", "/cleaning"] },
-  { href: "/timesheet", label: "Табель", icon: "clock" },
+  { href: "/timesheet", label: "Табель", icon: "clock", need: "attendance" },
   { href: "/reports", label: "Отчёты", icon: "reports", need: "reports", also: ["/staff"] },
 ];
 
@@ -26,6 +26,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const { user, can, openDialog, toasts, logout } = useStore();
 
+  // табель для планшета — отдельное приложение со своим входом, без меню CRM
+  if (path.startsWith("/tabel")) return <>{children}</>;
   if (!user) return <Login />;
 
   const nav = NAV.filter((n) => !n.need || can(n.need));
@@ -33,8 +35,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     n.href === "/" ? path === "/" : [n.href, ...(n.also ?? [])].some((h) => path.startsWith(h));
   const allowed =
     nav.some(isActive) && (!path.startsWith("/staff") || can("manageStaff")) && (!path.startsWith("/cleaning") || can("cleaning"));
-  // для консультанта «Табель» — это его отметка «пришла / ушла»
-  const label = (n: NavItem) => (n.href === "/timesheet" && !can("attendance") ? "Отметка" : n.label);
+  const label = (n: NavItem) => n.label;
 
   return (
     <div className="app">

@@ -317,3 +317,19 @@ export function buckets(db: DB, p: Period): Bucket[] {
   });
   return out;
 }
+
+/* ---------- Табель ---------- */
+
+/** Минуты между «пришла» и «ушла» */
+export function workMinutes(a?: { in?: string; out?: string }) {
+  if (!a?.in || !a.out) return 0;
+  const [h1, m1] = a.in.split(":").map(Number);
+  const [h2, m2] = a.out.split(":").map(Number);
+  return Math.max(0, h2 * 60 + m2 - (h1 * 60 + m1));
+}
+
+/** «8 ч 30 мин» */
+export function fmtMinutes(min: number) {
+  if (!min) return "";
+  return `${Math.floor(min / 60)} ч${min % 60 ? ` ${min % 60} мин` : ""}`;
+}

@@ -15,6 +15,7 @@ const SECTION: Record<string, string> = {
   "/dresses": "Редактор · Платья",
   "/cleaning": "Редактор · Химчистка",
   "/timesheet": "Табель",
+  "/tabel": "Табель на планшете",
   "/staff": "Сотрудники",
   "/reports": "Отчёты",
 };

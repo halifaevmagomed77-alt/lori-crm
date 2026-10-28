@@ -131,7 +131,6 @@ export type Cleaning = { id: ID; itemId: ID; bookingId?: ID; sentAt: DateStr; ba
 export type DB = {
   version: 3;
   demo?: boolean; // в базе пример данных, а не реальная работа салона
-  salonDevice?: string; // устройство салона: только с него консультанты входят и отмечают приход/уход
   staff: Staff[];
   attendance: Attendance[];
   suppliers: Supplier[];

@@ -9,21 +9,10 @@ import type { Attendance, Booking, Bride, DB, DressItem, Payment, Role, Staff, S
 
 const KEY = "lori-crm:v3";
 const USER_KEY = "lori-crm:session-v3";
-const DEVICE_KEY = "lori-crm:device";
+const KIOSK_KEY = "lori-crm:kiosk";
 
-/** Постоянный id этого браузера — по нему узнаём устройство салона */
-function deviceId() {
-  try {
-    let id = window.localStorage.getItem(DEVICE_KEY);
-    if (!id) {
-      id = `dev${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-      window.localStorage.setItem(DEVICE_KEY, id);
-    }
-    return id;
-  } catch {
-    return "no-storage";
-  }
-}
+/** Табель на планшете открыт на сегодня — кем и в какой день */
+export type Kiosk = { by: string; date: string };
 
 const nowTime = () => {
   const d = new Date();
@@ -95,7 +84,7 @@ function useStoreValue() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [device, setDevice] = useState("");
+  const [kiosk, setKiosk] = useState<Kiosk | null>(null);
 
   useEffect(() => {
     const data = load();
@@ -106,7 +95,10 @@ function useStoreValue() {
     // единоразовая загрузка из localStorage после монтирования
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDb(data);
-    setDevice(deviceId());
+    try {
+      const k = JSON.parse(window.localStorage.getItem(KIOSK_KEY) ?? "null") as Kiosk | null;
+      if (k && k.date === today() && data.staff.some((s) => s.id === k.by && s.active)) setKiosk(k);
+    } catch {}
     setUserId(u && data.staff.some((s) => s.id === u && s.active) ? u : null);
   }, []);
 
@@ -148,8 +140,6 @@ function useStoreValue() {
         const s = db.staff.find((x) => x.login.toLowerCase() === login.trim().toLowerCase());
         if (!s || s.password !== password) return "Неверный логин или пароль";
         if (!s.active) return "Доступ для этой учётной записи закрыт";
-        if (s.role === "employee" && db.salonDevice && db.salonDevice !== device)
-          return "Консультанты входят только с устройства салона";
         setUserId(s.id);
         try {
           window.localStorage.setItem(USER_KEY, s.id);
@@ -164,19 +154,48 @@ function useStoreValue() {
           window.localStorage.removeItem(USER_KEY);
         } catch {}
       },
-      /** Это устройство отмечено владельцем как устройство салона */
-      isSalonDevice: !!db.salonDevice && db.salonDevice === device,
-      salonDeviceSet: !!db.salonDevice,
-      setSalonDevice: (on: boolean) => update((d) => ({ ...d, salonDevice: on ? device : undefined })),
-      /** Отметка консультанта «пришла» / «ушла» — текущим временем */
-      checkIn: (kind: "in" | "out") =>
+      /* ---------- Табель на планшете ---------- */
+      kiosk: kiosk && kiosk.date === today() ? kiosk : null,
+      /** Открыть табель на сегодня — только администратор или владелец. Возвращает текст ошибки или null. */
+      openKiosk: (login: string, password: string): string | null => {
+        const s = db.staff.find((x) => x.login.toLowerCase() === login.trim().toLowerCase());
+        if (!s || s.password !== password) return "Неверный логин или пароль";
+        if (!s.active) return "Доступ для этой учётной записи закрыт";
+        if (s.role === "employee") return "Табель открывает администратор или владелец";
+        const k = { by: s.id, date: today() };
+        setKiosk(k);
+        try {
+          window.localStorage.setItem(KIOSK_KEY, JSON.stringify(k));
+        } catch {}
+        return null;
+      },
+      /** Закрыть табель — пароль администратора или владельца */
+      closeKiosk: (password: string): boolean => {
+        const ok = db.staff.some((s) => s.active && s.role !== "employee" && s.password === password);
+        if (!ok) return false;
+        setKiosk(null);
+        try {
+          window.localStorage.removeItem(KIOSK_KEY);
+        } catch {}
+        return true;
+      },
+      checkPassword: (staffId: string, password: string) => db.staff.some((s) => s.id === staffId && s.active && s.password === password),
+      /** Отметка сотрудника на планшете текущим временем */
+      mark: (staffId: string, kind: "in" | "out" | "off") =>
         update((d) => {
           const date = today();
-          const ex = d.attendance.find((x) => x.staffId === me && x.date === date);
-          const patch = kind === "in" ? { in: nowTime(), dayOff: false } : { out: nowTime() };
+          const ex = d.attendance.find((x) => x.staffId === staffId && x.date === date);
+          const patch =
+            kind === "in"
+              ? { in: nowTime(), out: undefined, dayOff: false }
+              : kind === "out"
+                ? { out: nowTime() }
+                : { dayOff: true, in: undefined, out: undefined };
           return {
             ...d,
-            attendance: ex ? d.attendance.map((x) => (x === ex ? { ...ex, ...patch } : x)) : [...d.attendance, { id: uid("a"), staffId: me, date, ...patch }],
+            attendance: ex
+              ? d.attendance.map((x) => (x === ex ? { ...ex, ...patch } : x))
+              : [...d.attendance, { id: uid("a"), staffId, date, ...patch }],
           };
         }),
       /** Комментарий — единственное, что консультант может менять после сохранения */
@@ -323,7 +342,7 @@ function useStoreValue() {
       fillDemo: (): string | null => {
         try {
           const demo = createDemo(db.staff);
-          setDb({ ...demo, salonDevice: db.salonDevice });
+          setDb(demo);
           setSheet(null);
           setDialog(null);
           return null;
@@ -333,13 +352,13 @@ function useStoreValue() {
       },
       /** Полная очистка: удаляются все невесты, записи, платья и поставщики; учётные записи остаются */
       clearAll: () => {
-        setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff, salonDevice: d?.salonDevice }));
+        setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff }));
         clearPhotos();
         setSheet(null);
         setDialog(null);
       },
     };
-  }, [db, userId, sheet, dialog, toasts, toast, update, device]);
+  }, [db, userId, sheet, dialog, toasts, toast, update, kiosk]);
 }
 
 export type Store = NonNullable<ReturnType<typeof useStoreValue>>;
