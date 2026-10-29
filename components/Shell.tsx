@@ -17,7 +17,7 @@ type NavItem = { href: string; label: string; short?: string; icon: string; need
 const NAV: NavItem[] = [
   { href: "/", label: "Журнал", icon: "book" },
   { href: "/records", label: "Книга записей", short: "Книга записей", icon: "file" },
-  { href: "/brides", label: "Редактор", icon: "edit", also: ["/dresses", "/cleaning"] },
+  { href: "/brides", label: "Редактор", icon: "edit", need: "editAll", also: ["/dresses", "/cleaning"] },
   { href: "/timesheet", label: "Табель", icon: "clock", need: "attendance" },
   { href: "/reports", label: "Отчёты", icon: "reports", need: "reports", also: ["/staff"] },
 ];
@@ -30,7 +30,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   if (path.startsWith("/tabel")) return <>{children}</>;
   if (!user) return <Login />;
 
-  const nav = NAV.filter((n) => !n.need || can(n.need));
+  // у консультанта нет «Редактора»: невесты и платья — вкладки «Книги записей»
+  const nav = NAV.filter((n) => !n.need || can(n.need)).map((n) =>
+    n.href === "/records" && !can("editAll") ? { ...n, also: ["/brides", "/dresses"] } : n,
+  );
   const isActive = (n: NavItem) =>
     n.href === "/" ? path === "/" : [n.href, ...(n.also ?? [])].some((h) => path.startsWith(h));
   const allowed =
@@ -217,12 +220,29 @@ export function SubTabs({ items }: { items: { href: string; label: string; show?
 
 export function EditorTabs() {
   const { can } = useStore();
+  // консультант попадает к невестам и платьям из «Книги записей»
+  if (!can("editAll")) return <BookTabs />;
   return (
     <SubTabs
       items={[
         { href: "/brides", label: "Невесты" },
         { href: "/dresses", label: "Платья" },
         { href: "/cleaning", label: "Химчистка", show: can("cleaning") },
+      ]}
+    />
+  );
+}
+
+/** Вкладки «Книги записей» у консультанта */
+export function BookTabs() {
+  const { can } = useStore();
+  if (can("editAll")) return null;
+  return (
+    <SubTabs
+      items={[
+        { href: "/records", label: "Записи" },
+        { href: "/brides", label: "Невесты" },
+        { href: "/dresses", label: "Платья" },
       ]}
     />
   );

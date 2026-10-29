@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PageHead } from "@/components/Shell";
+import { BookTabs, PageHead } from "@/components/Shell";
 import { RecordCard, STATUS_TONE } from "@/components/sheets";
 import { Chip, Empty, Icon, Segmented } from "@/components/ui";
 import { addDays, fmtShort, today } from "@/lib/dates";
@@ -69,6 +69,7 @@ export default function RecordsPage() {
 
   return (
     <div className="page page-book">
+      <BookTabs />
       <PageHead
         title="Книга записей"
         sub={

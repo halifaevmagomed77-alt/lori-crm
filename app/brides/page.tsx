@@ -10,7 +10,7 @@ import { useStore } from "@/lib/store";
 import type { Booking } from "@/lib/types";
 
 export default function BridesPage() {
-  const { db, open, openDialog, user } = useStore();
+  const { db, open, openDialog, user, can } = useStore();
   const I = idx(db);
   const [q, setQ] = useState("");
   const [cons, setCons] = useState(user?.role === "employee" ? user.id : "all");
@@ -47,7 +47,7 @@ export default function BridesPage() {
     <div className="page">
       <EditorTabs />
       <PageHead
-        title="Редактор"
+        title={can("editAll") ? "Редактор" : "Невесты"}
         sub={`Невест в базе: ${db.brides.length}. Нажмите на невесту, чтобы открыть карточку и записи.`}
         actions={
           <button type="button" className="btn" onClick={() => openDialog({ kind: "visit" })}>
