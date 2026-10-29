@@ -485,8 +485,8 @@ function ItemCard({ it }: { it: DressItem }) {
               <dt>Закупка</dt>
               <dd className="tabular">
                 {fmtMoney(it.purchasePrice, it.purchaseCurrency)} · принесло {rub(revenue)}
-                {purchaseRub(db, it) > 0 && <span className="muted"> · окупилось на {Math.round((revenue / purchaseRub(db, it)) * 100)}%</span>}
-                {it.purchasePrice > 0 && !purchaseRub(db, it) && <span className="muted"> · укажите курс, чтобы посчитать окупаемость</span>}
+                {purchaseRub(it) > 0 && <span className="muted"> · окупилось на {Math.round((revenue / purchaseRub(it)) * 100)}%</span>}
+                
               </dd>
             </div>
           </>

@@ -301,7 +301,6 @@ function useStoreValue() {
         update((d) => ({ ...d, items: input.id ? d.items.map((x) => (x.id === item.id ? item : x)) : [...d.items, item] }));
         return item;
       },
-      setRate: (cur: "EUR" | "USD", value: number) => update((d) => ({ ...d, rates: { ...d.rates, [cur]: value || undefined } })),
       saveSupplier: (input: Omit<Supplier, "id"> & { id?: string }) => {
         const s: Supplier = { ...input, id: input.id ?? uid("s") };
         update((d) => ({ ...d, suppliers: input.id ? d.suppliers.map((x) => (x.id === s.id ? s : x)) : [...d.suppliers, s] }));

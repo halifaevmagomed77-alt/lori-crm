@@ -1046,30 +1046,6 @@ function MoneyInput({
   );
 }
 
-/** Курс к рублю — чтобы отчёты посчитали окупаемость закупки в валюте */
-function RatesField({ currencies }: { currencies: ("EUR" | "USD")[] }) {
-  const { db, setRate } = useStore();
-  return (
-    <div className="rates">
-      {currencies.map((c) => (
-        <label key={c} className="field-inline">
-          <span className="small">Курс для отчётов: 1 {c === "EUR" ? "€" : "$"} =</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={db.rates?.[c] ?? ""}
-            onChange={(e) => setRate(c, Number(e.target.value))}
-            aria-label={`Курс ${c}`}
-            placeholder="0"
-          />
-          <span className="small">₽</span>
-        </label>
-      ))}
-      <p className="field-hint">Курс общий для всех платьев. По нему закупка переводится в рубли в отчётах «окупилось» и «у кого выгоднее брать».</p>
-    </div>
-  );
-}
-
 function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) {
   const { db, saveItem, removeItem, toast, openDialog, open, closeSheet } = useStore();
   const models = [...new Set(db.items.map((i) => i.model))].sort();
@@ -1169,7 +1145,6 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
           <MoneyInput value={rent} onChange={setRent} />
         </Field>
       </div>
-      {[purchaseCur, costCur].filter((c) => c !== "RUB").length > 0 && <RatesField currencies={[...new Set([purchaseCur, costCur].filter((c): c is "EUR" | "USD" => c !== "RUB"))]} />}
       {item && (
         <DangerZone
           label={used ? "Снять с проката" : "Удалить платье"}
