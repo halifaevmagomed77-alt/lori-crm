@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { TEST_ACCOUNTS, createInitial } from "./seed";
 import { createDemo } from "./demo";
 import { clearPhotos, deletePhoto } from "./photos";
@@ -80,8 +80,87 @@ function load(): DB {
 function useStoreValue() {
   const [db, setDb] = useState<DB | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<Sheet>(null);
+  // карточки открываются стопкой: запись → невеста → платье; «Назад» закрывает верхнюю
+  const [sheets, setSheets] = useState<NonNullable<Sheet>[]>([]);
+  const sheet = sheets[sheets.length - 1] ?? null;
   const [dialog, setDialog] = useState<Dialog>(null);
+
+  /*
+   * Системная кнопка и жест «назад» на телефоне: каждая открытая карточка или форма —
+   * отдельная запись в истории браузера. «Назад» закрывает верхний слой, а не уводит со страницы.
+   * Закрытие кнопкой меняет экран сразу, а лишние записи истории убираются следом одним шагом;
+   * если в тот же момент открывается новый слой (форма → карточка), запись истории переиспользуется.
+   */
+  const layers = useRef(0);
+  const dialogOpen = useRef(false);
+  const debt = useRef(0); // сколько записей истории ещё нужно убрать
+  const ignore = useRef(0); // сколько popstate вызвали мы сами
+  const flushTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    dialogOpen.current = !!dialog;
+  }, [dialog]);
+  const popLayers = useCallback((count: number) => {
+    let n = 0;
+    for (let i = 0; i < count && layers.current > 0; i++) {
+      layers.current -= 1;
+      if (dialogOpen.current) {
+        dialogOpen.current = false;
+        setDialog(null);
+      } else n += 1;
+    }
+    if (n) setSheets((st) => st.slice(0, Math.max(0, st.length - n)));
+  }, []);
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      if (ignore.current > 0) {
+        ignore.current -= 1;
+        return;
+      }
+      const depth = typeof e.state?.lori === "number" ? e.state.lori : 0;
+      if (layers.current > depth) popLayers(layers.current - depth);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [popLayers]);
+  const pushLayer = useCallback(() => {
+    layers.current += 1;
+    if (debt.current > 0) {
+      // форма закрылась и сразу открылась карточка — та же запись истории
+      debt.current -= 1;
+      window.history.replaceState({ lori: layers.current }, "");
+    } else window.history.pushState({ lori: layers.current }, "");
+  }, []);
+  const back = useCallback(
+    (steps = 1) => {
+      if (layers.current === 0) {
+        // слой открыт без записи в истории — просто закрываем
+        if (dialogOpen.current) {
+          dialogOpen.current = false;
+          setDialog(null);
+        } else setSheets((st) => st.slice(0, Math.max(0, st.length - steps)));
+        return;
+      }
+      const before = layers.current;
+      popLayers(steps); // экран меняется сразу
+      debt.current += before - layers.current;
+      window.clearTimeout(flushTimer.current);
+      flushTimer.current = window.setTimeout(() => {
+        if (debt.current > 0) {
+          ignore.current += 1;
+          window.history.go(-debt.current);
+          debt.current = 0;
+        }
+      }, 0);
+    },
+    [popLayers],
+  );
+  const resetLayers = useCallback(() => {
+    layers.current = 0;
+    debt.current = 0;
+    dialogOpen.current = false;
+    setSheets([]);
+    setDialog(null);
+  }, []);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [kiosk, setKiosk] = useState<Kiosk | null>(null);
 
@@ -147,8 +226,7 @@ function useStoreValue() {
       },
       logout: () => {
         setUserId(null);
-        setSheet(null);
-        setDialog(null);
+        resetLayers();
         try {
           window.localStorage.removeItem(USER_KEY);
         } catch {}
@@ -224,11 +302,25 @@ function useStoreValue() {
             : { ...d, bookings: d.bookings.map((b) => (b.id === id ? { ...b, notes } : b)) },
         ),
       sheet,
-      open: (s: Sheet) => setSheet(s),
-      closeSheet: () => setSheet(null),
+      /** Открыть карточку поверх текущей; «Назад» вернёт к предыдущей */
+      open: (s: Sheet) => {
+        if (!s) return;
+        setSheets((st) => [...st, s]);
+        pushLayer();
+      },
+      closeSheet: () => back(),
+      /** Закрыть форму и карточку под ней одним шагом (после удаления платья) */
+      closeDialogAndSheet: () => back(dialogOpen.current ? 2 : 1),
       dialog,
-      openDialog: (d: Dialog) => setDialog(d),
-      closeDialog: () => setDialog(null),
+      /** Форма: если другая форма уже открыта, она заменяется (без лишнего шага «назад») */
+      openDialog: (d: Dialog) => {
+        if (d && !dialogOpen.current) pushLayer();
+        dialogOpen.current = !!d;
+        setDialog(d);
+      },
+      closeDialog: () => {
+        if (dialogOpen.current) back();
+      },
       toasts,
       toast,
 
@@ -361,8 +453,7 @@ function useStoreValue() {
         try {
           const demo = createDemo(db.staff);
           setDb(demo);
-          setSheet(null);
-          setDialog(null);
+          resetLayers();
           return null;
         } catch (e) {
           return e instanceof Error ? e.message : "Не получилось";
@@ -392,11 +483,10 @@ function useStoreValue() {
       clearAll: () => {
         setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff }));
         clearPhotos();
-        setSheet(null);
-        setDialog(null);
+        resetLayers();
       },
     };
-  }, [db, userId, sheet, dialog, toasts, toast, update, kiosk]);
+  }, [db, userId, sheet, dialog, toasts, toast, update, kiosk, pushLayer, back, resetLayers]);
 }
 
 export type Store = NonNullable<ReturnType<typeof useStoreValue>>;

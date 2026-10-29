@@ -94,8 +94,12 @@ export function Modal({
       }}
     >
       <div className="modal-head">
+        {/* на телефоне форма — отдельный экран со стрелкой «назад» слева */}
+        <button type="button" className="icon-btn modal-back" onClick={onClose} aria-label="Назад">
+          <Icon name="chevronL" />
+        </button>
         <h2 className="modal-title">{title}</h2>
-        <button type="button" className="icon-btn" onClick={onClose} aria-label="Закрыть">
+        <button type="button" className="icon-btn modal-x" onClick={onClose} aria-label="Закрыть">
           <Icon name="close" />
         </button>
       </div>
@@ -127,10 +131,13 @@ export function Drawer({ label, onClose, children }: { label: string; onClose: (
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <button type="button" className="icon-btn drawer-close" onClick={onClose} aria-label="Закрыть">
-        <Icon name="close" />
-      </button>
-      {children}
+      <div className="drawer-bar">
+        <button type="button" className="back-btn" onClick={onClose}>
+          <Icon name="chevronL" size={22} /> Назад
+        </button>
+        <span className="drawer-bar-title">{label}</span>
+      </div>
+      <div className="drawer-body">{children}</div>
     </dialog>
   );
 }

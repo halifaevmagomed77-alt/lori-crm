@@ -1202,7 +1202,7 @@ function MoneyInput({
 }
 
 function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) {
-  const { db, saveItem, removeItem, toast, open, closeSheet } = useStore();
+  const { db, saveItem, removeItem, toast, open, closeDialogAndSheet } = useStore();
   const models = [...new Set(db.items.map((i) => i.model))].sort();
   const [model, setModel] = useState(item?.model ?? "");
   const [size, setSize] = useState(item?.size ?? "44");
@@ -1300,8 +1300,7 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
           onConfirm={() => {
             const r = removeItem(item.id);
             toast(r === "archived" ? `${item.model} снято с проката` : `${item.model} удалено`);
-            closeSheet();
-            onClose();
+            closeDialogAndSheet();
           }}
         />
       )}

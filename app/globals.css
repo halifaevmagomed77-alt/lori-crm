@@ -1030,3 +1030,67 @@ button.mini-row:hover { background: var(--sand); }
 }
 .entry-form .dress-pick-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 104px)); }
 .rc-fine { color: var(--ink-red); }
+
+/* =========================================================
+   Мобильная версия: навигация «назад», шапки, поля, высота
+   ========================================================= */
+
+/* Карточка — отдельный экран с полосой «Назад» */
+.drawer { padding: 0; }
+.drawer-bar {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px;
+  min-height: 52px; padding: 0 12px 0 4px; padding-top: env(safe-area-inset-top);
+  background: #fff; border-bottom: 1px solid var(--line);
+}
+.back-btn { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 10px 0 4px; border: 0; background: none; font-size: 16px; font-weight: 600; color: var(--ink); border-radius: 8px; }
+.back-btn:hover { background: var(--canvas); }
+.drawer-bar-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--stone); text-align: right; }
+.drawer-body { padding: 24px; }
+.drawer .drawer-body > .paper { margin: -24px; }
+.entry-head { padding-right: 0; }
+@media (max-width: 520px) {
+  .drawer { width: 100vw; }
+  .drawer-body { padding: 20px 16px; }
+  .drawer .drawer-body > .paper { margin: -20px -16px; }
+}
+
+/* Форма: на телефоне стрелка «назад» слева, на компьютере — крестик справа */
+.modal-head { gap: 8px; }
+.modal-head .modal-title { flex: 1; min-width: 0; }
+.modal-back { display: none; }
+@media (max-width: 640px) {
+  .modal-back { display: inline-grid; margin-left: -8px; }
+  .modal-x { display: none; }
+  .modal-head { position: sticky; top: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; border-bottom: 1px solid var(--line); background: #fff; }
+  .modal-title { font-size: 21px; }
+  .modal-body { padding: 14px 16px 20px; }
+  .modal-foot { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 900px) {
+  /* шапка непрозрачная — текст под ней не просвечивает */
+  .topbar { background: #fff; backdrop-filter: none; padding-top: env(safe-area-inset-top); height: calc(var(--top) + env(safe-area-inset-top)); }
+  .date-bar { background: var(--canvas); backdrop-filter: none; top: calc(var(--top) + env(safe-area-inset-top)); }
+  /* iPhone увеличивает страницу при вводе в поле со шрифтом меньше 16px — отсюда «едет ширина» */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea { font-size: 16px !important; }
+  /* круглая кнопка «+» не закрывает низ страницы */
+  .app:has(.fab-group) .main { padding-bottom: calc(var(--tab) + 92px + env(safe-area-inset-bottom)); }
+  .no-tabbar.app:has(.fab-group) .main { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .tabbar { padding-bottom: env(safe-area-inset-bottom); }
+  /* красная строка оплаты и кнопка подтверждения — друг под другом */
+  .pay-line { grid-template-columns: 1fr; }
+  .pay-line > .stamp, .pay-line > .btn { grid-column: 1; grid-row: auto; justify-self: start; }
+  .pay-what { font-size: 16px; }
+}
+
+/* Высота — по видимой части экрана (адресная строка браузера не обрезает низ) */
+.app, .main, .login, .kiosk { min-height: 100dvh; }
+html, body { overflow-x: clip; }
+/* Табель на узком экране: время целиком, без значков часов */
+.time-cell::-webkit-calendar-picker-indicator { display: none; }
+@media (max-width: 640px) {
+  .timesheet .attendance th:first-child { width: 34%; }
+  .timesheet .time-cell { width: 100%; min-width: 64px; padding: 2px 0; }
+}

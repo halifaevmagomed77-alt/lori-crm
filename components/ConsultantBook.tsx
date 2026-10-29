@@ -150,7 +150,9 @@ function EntryForm({ onDone }: { onDone: () => void }) {
     depositNo: takenNo ? "Такой номер уже есть" : "",
   };
   const ok = Object.values(errors).every((e) => !e);
-  const err = (k: keyof typeof errors) => (tried || k === "phone" || k === "item" || k === "depositNo" || k === "event" ? errors[k] : "");
+  // «обязательное поле» — только после попытки отправить; дубль, занятое платье и прошедшая дата — сразу
+  const instant = { phone: !!dup, item: !!conflict, depositNo: !!takenNo, event: pastEvent } as Record<string, boolean>;
+  const err = (k: keyof typeof errors) => (tried || instant[k] ? errors[k] : "");
 
   const pickItem = (id: string) => {
     setItem(id);
