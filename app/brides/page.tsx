@@ -51,7 +51,7 @@ export default function BridesPage() {
         sub={`Невест в базе: ${db.brides.length}. Нажмите на невесту, чтобы открыть карточку и записи.`}
         actions={
           <button type="button" className="btn" onClick={() => openDialog({ kind: "visit" })}>
-            <Icon name="door" size={18} /> Зашла невеста
+            <Icon name="plus" size={18} /> Новая запись
           </button>
         }
       />

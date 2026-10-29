@@ -233,13 +233,13 @@ function ItemPicker({
   );
 }
 
-/* ---------- Зашла невеста ---------- */
+/* ---------- Новая запись: невеста пришла в салон (или онлайн — сразу договор) ---------- */
 
 function VisitForm({ brideId, date, onClose }: { brideId?: string; date?: string; onClose: () => void }) {
   const { db, user, addVisit, saveBride, toast, openDialog, can } = useStore();
   const I = idx(db);
   const consultants = db.staff.filter((s) => s.role === "employee" && s.active);
-  const [mode, setMode] = useState<"new" | "known">(brideId ? "known" : "new");
+  const [mode, setMode] = useState<"new" | "known" | "online">(brideId ? "known" : "new");
   const [picked, setPicked] = useState<string | undefined>(brideId);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -276,17 +276,20 @@ function VisitForm({ brideId, date, onClose }: { brideId?: string; date?: string
   };
 
   return (
-    <Modal title="Зашла невеста" onClose={onClose} wide footer={<Foot onClose={onClose} label={thenBook ? "Дальше: договор на залог" : "Записать визит"} onSubmit={submit} />}>
+    <Modal title="Новая запись" onClose={onClose} wide footer={<Foot onClose={onClose} label={thenBook ? "Дальше: договор на залог" : "Сохранить визит"} onSubmit={submit} />}>
       <Segmented
         label="Невеста"
         value={mode}
         onChange={(m) => {
+          // онлайн-запись без визита — сразу договор на залог
+          if (m === "online") return openDialog({ kind: "booking", online: true });
           setMode(m);
           setPicked(undefined);
         }}
         options={[
           { value: "new", label: "Первый раз" },
           { value: "known", label: "Уже была (возвратная)" },
+          { value: "online", label: "Онлайн, без визита" },
         ]}
       />
 
@@ -369,7 +372,7 @@ function VisitForm({ brideId, date, onClose }: { brideId?: string; date?: string
       </Field>
       <label className="check">
         <input type="checkbox" checked={thenBook} onChange={(e) => setThenBook(e.target.checked)} />
-        <span>Невеста сразу вносит залог — оформить запись</span>
+        <span>Невеста вносит залог — оформить договор</span>
       </label>
     </Modal>
   );
@@ -384,12 +387,14 @@ function BookingForm({
   visitId,
   itemId,
   booking,
+  online: startOnline,
   onClose,
 }: {
   brideId?: string;
   visitId?: string;
   itemId?: string;
   booking?: Booking;
+  online?: boolean;
   onClose: () => void;
 }) {
   const { db, user, createBooking, updateBooking, toast, open, saveBride, can } = useStore();
@@ -397,7 +402,7 @@ function BookingForm({
   const visit = visitId ? db.visits.find((v) => v.id === visitId) : undefined;
   const consultants = db.staff.filter((s) => s.role === "employee" && s.active);
   const [bride, setBride] = useState<string | undefined>(booking?.brideId ?? brideId);
-  const [online, setOnline] = useState(false);
+  const [online, setOnline] = useState(!!startOnline);
   const [nbName, setNbName] = useState("");
   const [nbPhone, setNbPhone] = useState("");
   const [nbCons, setNbCons] = useState(user?.role === "employee" ? user.id : consultants[0]?.id ?? "");

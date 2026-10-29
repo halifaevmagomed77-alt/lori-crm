@@ -47,7 +47,7 @@ export type Sheet = { kind: "booking"; id: string } | { kind: "bride"; id: strin
 
 export type Dialog =
   | { kind: "visit"; brideId?: string; date?: string }
-  | { kind: "booking"; brideId?: string; visitId?: string; itemId?: string; booking?: Booking }
+  | { kind: "booking"; brideId?: string; visitId?: string; itemId?: string; booking?: Booking; online?: boolean }
   | { kind: "issue"; bookingId: string }
   | { kind: "return"; bookingId: string }
   | { kind: "refuse"; bookingId: string }

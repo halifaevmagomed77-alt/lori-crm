@@ -921,3 +921,8 @@ button.mini-row:hover { background: var(--sand); }
   .kadm-row .btn { grid-column: 2; grid-row: 1 / span 2; }
   .kiosk-admin { margin: 0 auto; }
 }
+
+/* Переключатель в формах на телефоне: варианты в ряд на всю ширину, без прокрутки и схлопывания */
+.modal-body .segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; overflow: visible; max-width: none; }
+.modal-body .segmented-item { white-space: normal; line-height: 1.2; min-height: 44px; padding: 6px 8px; }
+.dress-pick-grid > li.muted { grid-column: 1 / -1; }

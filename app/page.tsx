@@ -195,7 +195,7 @@ export default function JournalPage() {
             {visitList(s.visits)}
             {isToday && (
               <button type="button" className="link-btn" onClick={() => openDialog({ kind: "visit", date })}>
-                <Icon name="plus" size={16} /> Зашла невеста
+                <Icon name="plus" size={16} /> Новая запись
               </button>
             )}
           </Row>
@@ -207,11 +207,6 @@ export default function JournalPage() {
           </Row>
           <Row label="Запись" title="Договор на залог" summary={tally(s.records)} count={s.records.length}>
             {bookingList(s.records)}
-            {isToday && (
-              <button type="button" className="link-btn" onClick={() => openDialog({ kind: "booking" })}>
-                <Icon name="plus" size={16} /> Записать
-              </button>
-            )}
           </Row>
           <Row label="Отказ" summary={tally(s.refusals)} count={s.refusals.length} tone={s.refusals.length ? "bad" : undefined}>
             {bookingList(s.refusals)}

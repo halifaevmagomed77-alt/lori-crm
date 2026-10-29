@@ -46,10 +46,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </Link>
         <div className="quick">
           <button type="button" className="btn btn-block" onClick={() => openDialog({ kind: "visit" })}>
-            <Icon name="door" size={18} /> Зашла невеста
-          </button>
-          <button type="button" className="btn btn-ghost btn-block" onClick={() => openDialog({ kind: "booking" })}>
-            <Icon name="file" size={18} /> Запись (залог)
+            <Icon name="plus" size={18} /> Новая запись
           </button>
         </div>
         <nav className="side-nav" aria-label="Разделы">
@@ -92,11 +89,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </main>
 
       <div className="fab-group">
-        <button type="button" className="fab fab-secondary" onClick={() => openDialog({ kind: "booking" })} aria-label="Запись, договор на залог">
-          <Icon name="file" size={22} />
-        </button>
-        <button type="button" className="fab" onClick={() => openDialog({ kind: "visit" })} aria-label="Зашла невеста">
-          <Icon name="door" size={24} />
+        <button type="button" className="fab" onClick={() => openDialog({ kind: "visit" })} aria-label="Новая запись">
+          <Icon name="plus" size={26} />
         </button>
       </div>
 
