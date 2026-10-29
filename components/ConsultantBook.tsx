@@ -4,9 +4,14 @@ import { useMemo, useState } from "react";
 import { addDays, today, weekday } from "@/lib/dates";
 import { brideHistory, findBrides, idx, itemConflict, rub, staffShort } from "@/lib/derive";
 import { useStore } from "@/lib/store";
+import type { Booking, Visit } from "@/lib/types";
 import { ItemPicker } from "./forms";
-import { RecordCard } from "./sheets";
+import { RecordCard, VisitCard } from "./sheets";
 import { Icon } from "./ui";
+
+type Entry =
+  | { kind: "booking"; b: Booking; date: string; time: string }
+  | { kind: "visit"; v: Visit; date: string; time: string };
 
 const PAY_WAYS = ["Наличные", "ВТБ", "Сбер", "Т-Банк", "Другой перевод"];
 const ddmmyyyy = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
@@ -16,35 +21,47 @@ const ddmmyyyy = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0,
  * дата и имя сверху, «Новая запись», поля записи и «Отправить на подтверждение».
  */
 export function ConsultantBook() {
-  const { db, user, logout, open } = useStore();
+  const { db, user, logout } = useStore();
   const [writing, setWriting] = useState(false);
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(10);
   const t = today();
   const I = idx(db);
 
-  // все, кого консультант встретила сегодня — и с записью, и без залога
-  const met = db.visits
-    .filter((v) => v.date === t && (v.consultantId === user?.id || v.servedBy === user?.id))
-    .sort((a, b) => b.time.localeCompare(a.time));
-  const todays = db.bookings.filter((b) => b.createdAt === t).sort((a, b) => b.depositNo - a.depositNo);
-  const all = useMemo(() => {
+  // Одна лента: записи с залогом и визиты без залога — в одном формате.
+  // Визит, после которого в тот же день оформили запись, показывается самой записью.
+  const entries = useMemo(() => {
     const s = q.trim().toLowerCase();
     const digits = s.replace(/\D/g, "");
-    return db.bookings
-      .filter((b) => b.createdAt !== t)
-      .filter((b) => {
-        if (!s) return true;
-        const br = I.bride.get(b.brideId);
-        return (
-          br?.name.toLowerCase().includes(s) ||
-          I.item.get(b.itemId)?.model.toLowerCase().includes(s) ||
-          (b.contractDeposit ?? String(b.depositNo)).toLowerCase() === s ||
-          (digits.length >= 4 && br?.phones.some((p) => p.replace(/\D/g, "").includes(digits)))
-        );
-      })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.depositNo - a.depositNo);
-  }, [db.bookings, q, t, I]);
+    const hit = (brideId: string, models: (string | undefined)[], no?: string) => {
+      if (!s) return true;
+      const br = I.bride.get(brideId);
+      return (
+        br?.name.toLowerCase().includes(s) ||
+        models.some((m) => m?.toLowerCase().includes(s)) ||
+        (!!no && no.toLowerCase() === s) ||
+        (digits.length >= 4 && br?.phones.some((p) => p.replace(/\D/g, "").includes(digits)))
+      );
+    };
+    const list: Entry[] = [
+      ...db.bookings
+        .filter((b) => hit(b.brideId, [I.item.get(b.itemId)?.model], b.contractDeposit ?? String(b.depositNo)))
+        .map((b) => ({
+          kind: "booking" as const,
+          b,
+          date: b.createdAt,
+          time: db.visits.find((v) => v.brideId === b.brideId && v.date === b.createdAt)?.time ?? "",
+        })),
+      ...db.visits
+        .filter((v) => !db.bookings.some((k) => k.brideId === v.brideId && k.createdAt === v.date))
+        .filter((v) => hit(v.brideId, v.dressIds.map((id) => I.item.get(id)?.model)))
+        .map((v) => ({ kind: "visit" as const, v, date: v.date, time: v.time })),
+    ];
+    return list.sort((x, y) => (y.date + y.time).localeCompare(x.date + x.time));
+  }, [db.bookings, db.visits, q, I]);
+  const todays = entries.filter((e) => e.date === t);
+  const all = entries.filter((e) => e.date !== t);
+  const card = (e: Entry) => (e.kind === "booking" ? <RecordCard key={e.b.id} b={e.b} /> : <VisitCard key={e.v.id} v={e.v} />);
 
   return (
     <div className="page cbook">
@@ -69,51 +86,11 @@ export function ConsultantBook() {
         </button>
       )}
 
-      <section className="cbook-section" aria-label="Сегодня встретила">
+      <section className="cbook-section" aria-label="Сегодня">
         <h2 className="cbook-title">
-          Сегодня встретила <span className="today-count">{met.length}</span>
+          Сегодня <span className="today-count">{todays.length}</span>
         </h2>
-        {met.length ? (
-          <ul className="met-list">
-            {met.map((v) => {
-              const br = I.bride.get(v.brideId);
-              const booked = db.bookings.some((k) => k.brideId === v.brideId && k.createdAt === t);
-              return (
-                <li key={v.id}>
-                  <button type="button" className="met-row" onClick={() => open({ kind: "bride", id: v.brideId })}>
-                    <span className="met-time tabular">{v.time}</span>
-                    <span className="met-main">
-                      <strong>{br?.name ?? "—"}</strong>
-                      <span className="muted small">
-                        {br?.phones[0] ?? "без телефона"}
-                        {v.dressIds.length ? ` · мерила ${v.dressIds.map((id) => I.item.get(id)?.model).filter(Boolean).join(", ")}` : ""}
-                        {v.returning ? " · возвратная" : ""}
-                      </span>
-                    </span>
-                    <span className={`met-tag${booked ? " is-booked" : ""}`}>{booked ? "запись" : "без залога"}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="muted small">Сегодня ещё никого не встретили.</p>
-        )}
-      </section>
-
-      <section className="cbook-section" aria-label="Сегодня записали">
-        <h2 className="cbook-title">
-          Сегодня записали <span className="today-count">{todays.length}</span>
-        </h2>
-        {todays.length ? (
-          <div className="record-book">
-            {todays.map((b) => (
-              <RecordCard key={b.id} b={b} />
-            ))}
-          </div>
-        ) : (
-          <p className="muted small">Сегодня ещё никого не записали.</p>
-        )}
+        {todays.length ? <div className="record-book">{todays.map(card)}</div> : <p className="muted small">Сегодня ещё никого не было.</p>}
       </section>
 
       <section className="cbook-section" aria-label="Все записи">
@@ -124,9 +101,7 @@ export function ConsultantBook() {
         </div>
         {all.length ? (
           <div className="record-book">
-            {all.slice(0, shown).map((b) => (
-              <RecordCard key={b.id} b={b} />
-            ))}
+            {all.slice(0, shown).map(card)}
             {all.length > shown && (
               <button type="button" className="btn btn-ghost btn-block" onClick={() => setShown((n) => n + 10)}>
                 Показать ещё ({all.length - shown})

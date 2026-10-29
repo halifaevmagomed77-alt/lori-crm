@@ -3,7 +3,7 @@
 import { fmtDate, fmtShort, relDay, today } from "@/lib/dates";
 import { ITEM_STATE_LABEL, STATUS_LABEL, contractNo, fmtMoney, idx, isOverdue, itemState, paid, payText, purchaseRub, rub, shortName, staffShort, tr } from "@/lib/derive";
 import { useStore } from "@/lib/store";
-import { type Booking, type Bride, type DressItem, type Payment } from "@/lib/types";
+import { type Booking, type Bride, type DressItem, type Payment, type Visit } from "@/lib/types";
 import { DressPhoto } from "./forms";
 import { Chip, Drawer, Icon, type Tone } from "./ui";
 
@@ -382,6 +382,74 @@ export function RecordCard({ b }: { b: Booking }) {
           {b.status !== "refused" && money.due > 0 && <span className="is-due">остаток {tr(money.due)} / не оплачен</span>}
         </span>
       )}
+    </button>
+  );
+}
+
+/** Визит без залога — та же карточка, что и запись, только пустые поля договора и денег */
+export function VisitCard({ v }: { v: Visit }) {
+  const { db, open } = useStore();
+  const I = idx(db);
+  const bride = I.bride.get(v.brideId);
+  const models = v.dressIds.map((id) => I.item.get(id)).filter(Boolean) as DressItem[];
+  const visitNo = db.visits.filter((x) => x.brideId === v.brideId && (x.date + x.time) <= (v.date + v.time)).length;
+  const servedBy = v.servedBy ? I.staff.get(v.servedBy) : undefined;
+  return (
+    <button type="button" className="paper record-card" onClick={() => open({ kind: "bride", id: v.brideId })}>
+      <span className="rc-head">
+        <span className="rc-date">{fmtDate(v.date)}</span>
+        <Chip tone="neutral">Без залога</Chip>
+      </span>
+      <span className="rc-name">{bride?.name ?? "—"}</span>
+      {visitNo > 1 && (
+        <span className="rc-returning">
+          Возвратная · {visitNo}-й визит
+          {servedBy ? ` · обслужила ${servedBy.name}` : ""}
+        </span>
+      )}
+      <span className="rc-lines">
+        <span className="rc-line">
+          <i>Тел</i>
+          <b className="tabular">{bride?.phones[0] ?? "—"}</b>
+        </span>
+        <span className="rc-line">
+          <i>Платье</i>
+          <b>
+            {models.length ? models.map((m) => m.model).join(", ") : "—"}
+            {models.length === 1 && <span className="muted"> · {models[0].size}</span>}
+          </b>
+        </span>
+      </span>
+      <span className="rc-money">
+        <span>
+          <i>Сумма</i>
+          <b>—</b>
+        </span>
+        <span>
+          <i>Залог</i>
+          <b>—</b>
+        </span>
+        <span>
+          <i>Доп</i>
+          <b>—</b>
+        </span>
+        <span>
+          <i>Штраф</i>
+          <b>—</b>
+        </span>
+      </span>
+      <span className="rc-lines">
+        <span className="rc-line">
+          <i>№ дог. аренды</i>
+          <b className="tabular">—</b>
+        </span>
+        <span className="rc-line">
+          <i>№ дог. залога</i>
+          <b className="tabular">—</b>
+        </span>
+      </span>
+      <span className="rc-cons">кон. {staffShort(I.staff.get(v.consultantId)?.name ?? "—")}</span>
+      {v.notes && <span className="rc-note">{v.notes}</span>}
     </button>
   );
 }
