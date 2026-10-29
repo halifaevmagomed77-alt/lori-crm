@@ -339,7 +339,10 @@ function useStoreValue() {
       addVisit: (input: Omit<Visit, "id" | "returning" | "consultantId"> & { consultantId?: string }) => {
         const bride = db.brides.find((b) => b.id === input.brideId);
         const returning = db.visits.some((v) => v.brideId === input.brideId && v.date <= input.date);
-        const visit: Visit = { ...input, id: uid("v"), returning, consultantId: bride?.consultantId ?? input.consultantId ?? me };
+        const consultantId = bride?.consultantId ?? input.consultantId ?? me;
+        // возвратная засчитывается своему консультанту, но запоминаем, кто обслужил на самом деле
+        const servedBy = me && me !== consultantId && user?.role === "employee" ? me : undefined;
+        const visit: Visit = { ...input, id: uid("v"), returning, consultantId, servedBy };
         update((d) => ({ ...d, visits: [...d.visits, visit].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)) }));
         return visit;
       },

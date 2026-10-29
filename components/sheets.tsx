@@ -276,6 +276,11 @@ export function RecordCard({ b }: { b: Booking }) {
   const overdue = isOverdue(b);
   const money = paid(db, b);
   const fines = money.payments.filter((p) => p.kind === "fine").reduce((s, p) => s + p.amount, 0);
+  // возвратная: до этой записи невеста уже приходила в салон
+  const upTo = db.visits.filter((v) => v.brideId === b.brideId && v.date <= b.createdAt);
+  const isReturning = upTo.some((v) => v.returning) || db.visits.some((v) => v.brideId === b.brideId && v.date < b.createdAt);
+  const visitsBefore = isReturning ? Math.max(1, upTo.length - 1) : 0;
+  const servedBy = b.createdBy !== b.consultantId ? I.staff.get(b.createdBy) : undefined;
   return (
     <button type="button" className="paper record-card" onClick={() => open({ kind: "booking", id: b.id })}>
       <span className="rc-head">
@@ -284,6 +289,12 @@ export function RecordCard({ b }: { b: Booking }) {
         <Chip tone={overdue ? "bad" : STATUS_TONE[b.status]}>{overdue ? "Просрочен" : STATUS_LABEL[b.status]}</Chip>
       </span>
       <span className="rc-name">{bride?.name ?? "—"}</span>
+      {visitsBefore > 0 && (
+        <span className="rc-returning">
+          Возвратная · {visitsBefore + 1}-й визит
+          {servedBy && servedBy.role === "employee" ? ` · обслужила ${servedBy.name}` : ""}
+        </span>
+      )}
       <span className="rc-lines">
         <span className="rc-line">
           <i>Платье</i>

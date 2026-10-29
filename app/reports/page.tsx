@@ -122,7 +122,12 @@ export default function ReportsPage() {
         <h2 className="lines-title">Невесты</h2>
         <Line label="Зашли" value={f.visits} was={pf.visits} />
         <Line label="Примерка" value={f.tried} share={`${pct(f.tried, f.visits)} от зашедших`} was={pf.tried} />
-        <Line label="Возвратные" value={f.returning} share={`${pct(f.returning, f.visits)} от зашедших`} was={pf.returning} />
+        <Line
+          label="Возвратные"
+          value={f.returning}
+          share={`${pct(f.returning, f.visits)} от зашедших · записались ${f.returningRecords} — ${pct(f.returningRecords, f.returning)}`}
+          was={pf.returning}
+        />
         <Line label="Запись" value={f.records} share={`${pct(f.records, f.visits)} от зашедших`} was={pf.records} strong />
         <Line label="Отказ" value={f.refusals} share={`${pct(f.refusals, f.records)} от записей`} was={pf.refusals} />
         <Line label="Выдано" value={f.issued} was={pf.issued} />
@@ -235,6 +240,7 @@ export default function ReportsPage() {
                 <th scope="col" className="num">Встретила</th>
                 <th scope="col" className="num">Примерили</th>
                 <th scope="col" className="num">Возвратные</th>
+                <th scope="col" className="num">Возвр. записались</th>
                 <th scope="col" className="num">Записала</th>
                 <th scope="col" className="num">% записи</th>
                 <th scope="col" className="num">Отказы</th>
@@ -249,6 +255,9 @@ export default function ReportsPage() {
                   <td className="num">{r.visits}</td>
                   <td className="num">{r.tried}</td>
                   <td className="num">{r.returning}</td>
+                  <td className="num">
+                    {r.returningRecords} · {pct(r.returningRecords, r.returning)}
+                  </td>
                   <td className="num">{r.records}</td>
                   <td className="num">
                     <strong>{pct(r.records, r.visits)}</strong>

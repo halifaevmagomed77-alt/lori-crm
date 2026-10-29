@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { addDays, today, weekday } from "@/lib/dates";
-import { idx, itemConflict, rub, staffShort } from "@/lib/derive";
+import { brideHistory, findBrides, idx, itemConflict, rub, staffShort } from "@/lib/derive";
 import { useStore } from "@/lib/store";
 import { ItemPicker } from "./forms";
 import { RecordCard } from "./sheets";
@@ -132,9 +132,10 @@ function EntryForm({ onDone }: { onDone: () => void }) {
   const ret = event ? addDays(event, 1) : "";
   const picked = brideId ? I.bride.get(brideId) : undefined;
 
-  // защита от двойных записей
-  const digits = phone.replace(/\D/g, "").slice(-10);
-  const dup = !brideId && digits.length >= 10 ? db.brides.find((b) => b.phones.some((p) => p.replace(/\D/g, "").endsWith(digits))) : undefined;
+  // возвратная невеста: совпадения по фамилии или телефону показываются сразу при вводе
+  const matches = picked ? [] : findBrides(db, name, phone);
+  const dup = matches.find((m) => m.exactPhone)?.b; // точно такой же номер — новую карточку не создаём
+  const hist = picked ? brideHistory(db, picked.id) : undefined;
   const conflict = item && event ? itemConflict(db, item, issue, ret) : undefined;
   const active = brideId ? db.bookings.find((k) => k.brideId === brideId && (k.status === "booked" || k.status === "issued")) : undefined;
   const takenNo = depositNo.trim() ? db.bookings.find((k) => (k.contractDeposit ?? "").trim() === depositNo.trim()) : undefined;
@@ -142,7 +143,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
 
   const errors = {
     name: !picked && !name.trim() ? "Укажите ФИО" : "",
-    phone: !picked && !phone.trim() ? "Укажите телефон" : dup ? "Номер уже в базе" : "",
+    phone: !picked && !phone.trim() ? "Укажите телефон" : dup ? "Этот номер уже в базе — выберите невесту выше" : "",
     item: !item ? "Выберите платье" : conflict ? "Платье занято на эти даты" : "",
     event: !event ? "Укажите дату свадьбы" : pastEvent ? "Дата уже прошла" : "",
     sum: !Number(sum) ? "Укажите сумму" : "",
@@ -203,33 +204,60 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
 
-      {picked ? (
-        <Line label="Имя">
-          <span className="ef-picked">
-            <strong>{picked.name}</strong> · {picked.phones[0]}
-            <button type="button" className="link-btn small" onClick={() => setBrideId(undefined)}>
-              другая невеста
-            </button>
-          </span>
-        </Line>
+      {picked && hist ? (
+        <div className="returning-box" role="status">
+          <p className="returning-tag">
+            <Icon name="reset" size={16} /> Возвратная невеста · {hist.count + (visited ? 1 : 0)}-й визит
+          </p>
+          <p className="returning-name">{picked.name}</p>
+          <p className="returning-meta">
+            {picked.phones.join(", ")}
+            {hist.last ? ` · была ${ddmmyyyy(hist.last.date)}` : " · в салоне ещё не была (онлайн-запись)"}
+          </p>
+          <p className="returning-meta">
+            Консультант: <strong>{I.staff.get(picked.consultantId)?.name ?? "—"}</strong>
+            {picked.consultantId !== user?.id && " — запись засчитается ей, вы будете указаны как обслужившая"}
+          </p>
+          {hist.tried.length > 0 && <p className="returning-meta">Мерила: {hist.tried.join(", ")}</p>}
+          {picked.notes && <p className="returning-meta">Комментарий: {picked.notes}</p>}
+          <button type="button" className="link-btn small" onClick={() => setBrideId(undefined)}>
+            Это другая невеста
+          </button>
+        </div>
       ) : (
         <>
           <Line label="ФИО невесты" error={err("name")}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Фамилия Имя Отчество" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Фамилия Имя Отчество" autoComplete="off" />
           </Line>
           <Line label="Тел." error={err("phone")}>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="8 9__ ___ __ __" />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="8 9__ ___ __ __" autoComplete="off" />
           </Line>
-          {dup && (
-            <p className="callout callout-info" role="alert">
-              <Icon name="alert" size={18} />
-              <span>
-                Этот номер уже есть: <strong>{dup.name}</strong>, консультант {I.staff.get(dup.consultantId)?.name}.{" "}
-                <button type="button" className="link-btn" onClick={() => setBrideId(dup.id)}>
-                  Это она — записать её
-                </button>
-              </span>
-            </p>
+          {matches.length > 0 && (
+            <div className="matches" role="region" aria-label="Уже были в салоне">
+              <p className="matches-title">Уже были в салоне — если это она, нажмите:</p>
+              <ul>
+                {matches.map(({ b: m, exactPhone }) => {
+                  const h = brideHistory(db, m.id);
+                  return (
+                    <li key={m.id}>
+                      <button type="button" className={`match${exactPhone ? " is-exact" : ""}`} onClick={() => setBrideId(m.id)}>
+                        <span className="match-name">{m.name}</span>
+                        <span className="match-meta">
+                          {m.phones[0]}
+                          {h.last ? ` · была ${ddmmyyyy(h.last.date)}` : " · онлайн"} · визитов {h.count}
+                        </span>
+                        <span className="match-meta">
+                          {staffShort(I.staff.get(m.consultantId)?.name ?? "—")}
+                          {h.tried.length ? ` · мерила ${h.tried.slice(0, 3).join(", ")}` : ""}
+                          {h.active ? ` · есть запись № ${h.active.contractDeposit ?? h.active.depositNo}` : ""}
+                        </span>
+                        <span className="match-go">Это она</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </>
       )}

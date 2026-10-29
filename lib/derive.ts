@@ -181,6 +181,8 @@ export function funnel(db: DB, p: Period, consultantId?: string) {
     visits: visits.length,
     tried: visits.filter((v) => v.tried).length,
     returning: visits.filter((v) => v.returning).length,
+    // возвратные, которые в тот же день оформили договор
+    returningRecords: visits.filter((v) => v.returning && db.bookings.some((b) => b.brideId === v.brideId && b.createdAt === v.date)).length,
     records: records.length,
     refusals: refusals.length,
     issued: issued.length,
@@ -369,4 +371,41 @@ const ddmm = (d: DateStr) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
 export function payText(p: Payment) {
   const how = p.method === "cash" ? "наличные" : p.bank ?? "перевод";
   return `${PAY_WORD[p.kind]} ${tr(p.amount)}${p.reason ? ` (${p.reason.toLowerCase()})` : ""} / ${how} / ${ddmm(p.date)}`;
+}
+
+/* ---------- История невесты: для поиска возвратных ---------- */
+
+export function brideHistory(db: DB, brideId: string) {
+  const I = idx(db);
+  const visits = db.visits.filter((v) => v.brideId === brideId).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+  const bookings = db.bookings.filter((b) => b.brideId === brideId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const last = visits[0];
+  const tried = [...new Set(visits.flatMap((v) => v.dressIds).map((id) => I.item.get(id)?.model).filter(Boolean))] as string[];
+  return {
+    visits,
+    count: visits.length,
+    last,
+    tried,
+    bookings,
+    active: bookings.find((b) => b.status === "booked" || b.status === "issued"),
+  };
+}
+
+/** Похожие невесты из базы — по фамилии/имени (от 3 букв) или цифрам телефона (от 4) */
+export function findBrides(db: DB, name: string, phone: string, limit = 5) {
+  const n = name.trim().toLowerCase();
+  const d = phone.replace(/\D/g, "").slice(-10);
+  if (n.length < 3 && d.length < 4) return [];
+  const words = n.split(/\s+/).filter((w) => w.length >= 3);
+  return db.brides
+    .map((b) => {
+      const bn = b.name.toLowerCase();
+      const byPhone = d.length >= 4 && b.phones.some((p) => p.replace(/\D/g, "").includes(d));
+      const exactPhone = d.length >= 10 && b.phones.some((p) => p.replace(/\D/g, "").endsWith(d));
+      const byName = words.length > 0 && words.every((w) => bn.includes(w));
+      return { b, score: (exactPhone ? 4 : 0) + (byPhone ? 2 : 0) + (byName ? 1 : 0), exactPhone };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }

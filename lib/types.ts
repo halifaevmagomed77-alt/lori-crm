@@ -83,6 +83,7 @@ export type Visit = {
   tried: boolean; // «Примерка»
   dressIds: ID[];
   returning: boolean; // «Возвратная» — уже была в салоне раньше
+  servedBy?: ID; // кто обслужил на самом деле, если не закреплённый консультант (например, та выходная)
   notes: string;
 };
 
