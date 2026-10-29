@@ -15,7 +15,7 @@ export function DialogHost() {
   const close = closeDialog;
   switch (dialog.kind) {
     case "visit":
-      return <VisitForm key="v" brideId={dialog.brideId} date={dialog.date} onClose={close} />;
+      return <VisitForm key="v" brideId={dialog.brideId} date={dialog.date} startMode={dialog.mode} onClose={close} />;
     case "booking":
       return <BookingForm key="b" {...dialog} onClose={close} />;
     case "issue":
@@ -235,11 +235,27 @@ function ItemPicker({
 
 /* ---------- Новая запись: невеста пришла в салон (или онлайн — сразу договор) ---------- */
 
-function VisitForm({ brideId, date, onClose }: { brideId?: string; date?: string; onClose: () => void }) {
+/** Один переключатель для всех трёх вариантов «Новой записи» — и в визите, и в онлайн-договоре */
+function NewRecordSwitch({ value, onChange }: { value: "new" | "known" | "online"; onChange: (v: "new" | "known" | "online") => void }) {
+  return (
+    <Segmented
+      label="Невеста"
+      value={value}
+      onChange={onChange}
+      options={[
+        { value: "new", label: "Первый раз" },
+        { value: "known", label: "Уже была (возвратная)" },
+        { value: "online", label: "Онлайн, без визита" },
+      ]}
+    />
+  );
+}
+
+function VisitForm({ brideId, date, startMode, onClose }: { brideId?: string; date?: string; startMode?: "new" | "known"; onClose: () => void }) {
   const { db, user, addVisit, saveBride, toast, openDialog, can } = useStore();
   const I = idx(db);
   const consultants = db.staff.filter((s) => s.role === "employee" && s.active);
-  const [mode, setMode] = useState<"new" | "known" | "online">(brideId ? "known" : "new");
+  const [mode, setMode] = useState<"new" | "known" | "online">(brideId ? "known" : startMode ?? "new");
   const [picked, setPicked] = useState<string | undefined>(brideId);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -277,8 +293,7 @@ function VisitForm({ brideId, date, onClose }: { brideId?: string; date?: string
 
   return (
     <Modal title="Новая запись" onClose={onClose} wide footer={<Foot onClose={onClose} label={thenBook ? "Дальше: договор на залог" : "Сохранить визит"} onSubmit={submit} />}>
-      <Segmented
-        label="Невеста"
+      <NewRecordSwitch
         value={mode}
         onChange={(m) => {
           // онлайн-запись без визита — сразу договор на залог
@@ -286,11 +301,6 @@ function VisitForm({ brideId, date, onClose }: { brideId?: string; date?: string
           setMode(m);
           setPicked(undefined);
         }}
-        options={[
-          { value: "new", label: "Первый раз" },
-          { value: "known", label: "Уже была (возвратная)" },
-          { value: "online", label: "Онлайн, без визита" },
-        ]}
       />
 
       {mode === "known" ? (
@@ -397,7 +407,7 @@ function BookingForm({
   online?: boolean;
   onClose: () => void;
 }) {
-  const { db, user, createBooking, updateBooking, toast, open, saveBride, can } = useStore();
+  const { db, user, createBooking, updateBooking, toast, open, openDialog, saveBride, can } = useStore();
   const I = idx(db);
   const visit = visitId ? db.visits.find((v) => v.id === visitId) : undefined;
   const consultants = db.staff.filter((s) => s.role === "employee" && s.active);
@@ -484,12 +494,15 @@ function BookingForm({
 
   return (
     <Modal
-      title={booking ? `Запись № ${booking.depositNo}` : "Запись: договор на залог"}
+      title={booking ? `Запись № ${booking.depositNo}` : startOnline ? "Новая запись" : "Запись: договор на залог"}
       onClose={onClose}
       wide
       footer={<Foot onClose={onClose} label={booking ? "Сохранить" : `Записать, залог ${deposit ? rub(Number(deposit)) : ""}`} onSubmit={submit} />}
     >
-      {!booking && (
+      {!booking && startOnline && (
+        <NewRecordSwitch value="online" onChange={(m) => m !== "online" && openDialog({ kind: "visit", mode: m })} />
+      )}
+      {!booking && !startOnline && (
         <Segmented
           label="Как записалась"
           value={online ? "online" : "salon"}

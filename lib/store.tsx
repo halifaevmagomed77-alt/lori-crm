@@ -46,7 +46,7 @@ export function can(role: Role, p: Permission) {
 export type Sheet = { kind: "booking"; id: string } | { kind: "bride"; id: string } | { kind: "item"; id: string } | null;
 
 export type Dialog =
-  | { kind: "visit"; brideId?: string; date?: string }
+  | { kind: "visit"; brideId?: string; date?: string; mode?: "new" | "known" }
   | { kind: "booking"; brideId?: string; visitId?: string; itemId?: string; booking?: Booking; online?: boolean }
   | { kind: "issue"; bookingId: string }
   | { kind: "return"; bookingId: string }
