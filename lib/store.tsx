@@ -56,7 +56,6 @@ export type Dialog =
   | { kind: "bride"; bride?: Bride }
   | { kind: "item"; item?: DressItem }
   | { kind: "staff"; staff?: Staff }
-  | { kind: "supplier"; supplier?: Supplier }
   | { kind: "feedback" }
   | { kind: "comment"; target: "bride" | "booking"; id: string }
   | null;

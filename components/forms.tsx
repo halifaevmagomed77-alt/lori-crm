@@ -5,7 +5,7 @@ import { addDays, diffDays, fmtDate, fmtShort, today } from "@/lib/dates";
 import { idx, isOverdue, itemConflict, itemState, paid, rub, shortName } from "@/lib/derive";
 import { deletePhoto, savePhoto, usePhoto } from "@/lib/photos";
 import { useStore } from "@/lib/store";
-import { CURRENCIES, MAX_EMPLOYEES, ROLE_LABEL, type Booking, type Bride, type Currency, type DressItem, type Payment, type Role, type Staff, type Supplier } from "@/lib/types";
+import { CURRENCIES, MAX_EMPLOYEES, ROLE_LABEL, type Booking, type Bride, type Currency, type DressItem, type Payment, type Role, type Staff } from "@/lib/types";
 import { FeedbackForm } from "./Demo";
 import { Field, Icon, Modal, Segmented } from "./ui";
 
@@ -34,8 +34,6 @@ export function DialogHost() {
       return <ItemForm key="it" item={dialog.item} onClose={close} />;
     case "staff":
       return <StaffForm key="st" staff={dialog.staff} onClose={close} />;
-    case "supplier":
-      return <SupplierForm key="su" supplier={dialog.supplier} onClose={close} />;
     case "feedback":
       return <FeedbackForm key="fb" onClose={close} />;
     case "comment":
@@ -1012,6 +1010,112 @@ function DangerZone({ label, note, confirmText, onConfirm, children }: { label: 
 
 /* ---------- Поступление платья (только владелец) ---------- */
 
+/**
+ * Поставщик прямо в форме платья: выбрать, добавить нового, переименовать или удалить —
+ * без отдельного окна, чтобы заполненная форма платья не терялась.
+ */
+function SupplierPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const { db, saveSupplier, removeSupplier, toast } = useStore();
+  const current = db.suppliers.find((s) => s.id === value);
+  const [mode, setMode] = useState<"pick" | "new" | "edit" | "delete">("pick");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const taken = !!name.trim() && db.suppliers.some((s) => s.id !== (mode === "edit" ? value : "") && s.name.toLowerCase() === name.trim().toLowerCase());
+  const used = current ? db.items.filter((i) => i.supplierId === current.id).length : 0;
+
+  if (mode === "pick")
+    return (
+      <div className="inline-row supplier-row">
+        <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Поставщик">
+          <option value="">Не указан</option>
+          {db.suppliers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        {current && (
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => (setName(current.name), setPhone(current.phone ?? ""), setMode("edit"))}>
+            <Icon name="edit" size={16} /> Изменить
+          </button>
+        )}
+        <button type="button" className="btn btn-ghost btn-small" onClick={() => (setName(""), setPhone(""), setMode("new"))}>
+          <Icon name="plus" size={16} /> Новый
+        </button>
+      </div>
+    );
+
+  if (mode === "delete" && current)
+    return (
+      <div className="danger-confirm">
+        <p>
+          Удалить поставщика «{current.name}»?
+          {used > 0 ? ` У него ${used} плат. — у них поставщик станет «Не указан». История аренды сохранится.` : ""}
+        </p>
+        <div className="danger-actions">
+          <button type="button" className="btn btn-ghost" onClick={() => setMode("edit")}>
+            Отмена
+          </button>
+          <button
+            type="button"
+            className="btn btn-red"
+            onClick={() => {
+              removeSupplier(current.id, "");
+              onChange("");
+              toast(`Поставщик ${current.name} удалён`);
+              setMode("pick");
+            }}
+          >
+            Удалить
+          </button>
+        </div>
+      </div>
+    );
+
+  const save = () => {
+    if (!name.trim() || taken) return;
+    const s = saveSupplier({ id: mode === "edit" ? value : undefined, name: name.trim(), phone: phone.trim() || undefined });
+    onChange(s.id);
+    toast(mode === "edit" ? "Поставщик изменён" : `Поставщик ${s.name} добавлен`);
+    setMode("pick");
+  };
+  return (
+    <div className="inline-new">
+      <p className="inline-new-title">{mode === "edit" ? "Изменить поставщика" : "Новый поставщик"}</p>
+      <div className="grid-2">
+        <label className="field">
+          <span className="field-label">Название</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), save())}
+            placeholder="Например, Bridal House, Стамбул"
+            autoFocus
+          />
+          {taken && <span className="field-error">Такой поставщик уже есть</span>}
+        </label>
+        <label className="field">
+          <span className="field-label">Телефон</span>
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="Необязательно" />
+        </label>
+      </div>
+      <div className="inline-row supplier-actions">
+        <button type="button" className="btn btn-small" disabled={!name.trim() || taken} onClick={save}>
+          {mode === "edit" ? "Сохранить" : "Добавить"}
+        </button>
+        <button type="button" className="btn btn-ghost btn-small" onClick={() => setMode("pick")}>
+          Отмена
+        </button>
+        {mode === "edit" && (
+          <button type="button" className="btn btn-ghost btn-small btn-danger supplier-del" onClick={() => setMode("delete")}>
+            Удалить поставщика
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Сумма с выбором валюты; без onCurrency — только рубли */
 function MoneyInput({
   value,
@@ -1047,7 +1151,7 @@ function MoneyInput({
 }
 
 function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) {
-  const { db, saveItem, removeItem, toast, openDialog, open, closeSheet } = useStore();
+  const { db, saveItem, removeItem, toast, open, closeSheet } = useStore();
   const models = [...new Set(db.items.map((i) => i.model))].sort();
   const [model, setModel] = useState(item?.model ?? "");
   const [size, setSize] = useState(item?.size ?? "44");
@@ -1119,20 +1223,8 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
           <input type="date" value={received} onChange={(e) => setReceived(e.target.value)} />
         </Field>
       </div>
-      <Field label="Поставщик" hint="Видит только владелец">
-        <div className="inline-row">
-          <select value={supplier} onChange={(e) => setSupplier(e.target.value)}>
-            <option value="">Не указан</option>
-            {db.suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => openDialog({ kind: "supplier" })}>
-            <Icon name="plus" size={16} /> Новый
-          </button>
-        </div>
+      <Field group label="Поставщик" hint="Видит только владелец">
+        <SupplierPicker value={supplier} onChange={setSupplier} />
       </Field>
       <div className="grid-3 price-row">
         <Field label="Закупка" hint="Только владелец">
@@ -1161,67 +1253,6 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
             onClose();
           }}
         />
-      )}
-    </Modal>
-  );
-}
-
-function SupplierForm({ supplier, onClose }: { supplier?: Supplier; onClose: () => void }) {
-  const { db, saveSupplier, removeSupplier, toast, closeDialog } = useStore();
-  const [name, setName] = useState(supplier?.name ?? "");
-  const [phone, setPhone] = useState(supplier?.phone ?? "");
-  const items = supplier ? db.items.filter((i) => i.supplierId === supplier.id) : [];
-  const others = db.suppliers.filter((s) => s.id !== supplier?.id);
-  const [moveTo, setMoveTo] = useState("");
-  return (
-    <Modal
-      title={supplier ? "Поставщик" : "Новый поставщик"}
-      onClose={onClose}
-      footer={
-        <Foot
-          onClose={onClose}
-          label="Сохранить"
-          onSubmit={() => {
-            if (!name.trim()) return;
-            saveSupplier({ id: supplier?.id, name: name.trim(), phone });
-            toast("Поставщик сохранён");
-            closeDialog();
-          }}
-        />
-      }
-    >
-      <Field label="Название" hint="Например: ИП Иванов И.И.">
-        <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-      </Field>
-      <Field label="Телефон">
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
-      </Field>
-      {supplier && (
-        <DangerZone
-          label="Удалить поставщика"
-          confirmText="Удалить"
-          note={
-            items.length
-              ? `У поставщика ${items.length} платьев. Выберите, к кому их перенести, — история проката сохранится.`
-              : "Платьев от этого поставщика нет, он будет удалён."
-          }
-          onConfirm={() => {
-            removeSupplier(supplier.id, moveTo);
-            toast(`${supplier.name} удалён`);
-            closeDialog();
-          }}
-        >
-          {items.length > 0 && (
-            <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} aria-label="Перенести платья к поставщику">
-              <option value="">Поставщик не указан</option>
-              {others.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </DangerZone>
       )}
     </Modal>
   );

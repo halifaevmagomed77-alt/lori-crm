@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { EditorTabs, PageHead } from "@/components/Shell";
 import { ITEM_TONE } from "@/components/sheets";
-import { Chip, Empty, Icon, Segmented } from "@/components/ui";
+import { Chip, Empty, Icon } from "@/components/ui";
 import { fmtShort } from "@/lib/dates";
 import { ITEM_STATE_LABEL, idx, itemState, rub, shortName, type ItemState } from "@/lib/derive";
 import { DressPhoto } from "@/components/forms";
@@ -12,7 +12,6 @@ import { useStore } from "@/lib/store";
 export default function DressesPage() {
   const { db, can, open, openDialog } = useStore();
   const I = idx(db);
-  const [tab, setTab] = useState<"items" | "suppliers">("items");
   const [q, setQ] = useState("");
   const [state, setState] = useState<ItemState | "all">("all");
   const [sup, setSup] = useState("all");
@@ -43,22 +42,7 @@ export default function DressesPage() {
         }
       />
 
-      {can("suppliers") && (
-        <div className="tabs-row">
-          <Segmented
-            label="Раздел"
-            value={tab}
-            onChange={setTab}
-            options={[
-              { value: "items", label: "Платья" },
-              { value: "suppliers", label: "Поставщики" },
-            ]}
-          />
-        </div>
-      )}
-
-      {tab === "items" ? (
-        <>
+      <>
           <div className="filters">
             <div className="search-input search-wide">
               <Icon name="search" size={18} />
@@ -130,53 +114,7 @@ export default function DressesPage() {
           ) : (
             <Empty title={archived ? "Снятых с проката платьев нет" : "Платьев с такими условиями нет"} />
           )}
-        </>
-      ) : (
-        <>
-          <div className="filters">
-            <button type="button" className="btn btn-ghost" onClick={() => openDialog({ kind: "supplier" })}>
-              <Icon name="plus" size={18} /> Новый поставщик
-            </button>
-            <p className="muted small">Эту вкладку видит только владелец. Нажмите на поставщика, чтобы изменить или удалить его.</p>
-          </div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">Поставщик</th>
-                  <th scope="col">Телефон</th>
-                  <th scope="col" className="num">Платьев</th>
-                  <th scope="col">Модели</th>
-                </tr>
-              </thead>
-              <tbody>
-                {db.suppliers.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="muted">
-                      Поставщиков пока нет
-                    </td>
-                  </tr>
-                )}
-                {db.suppliers.map((s) => {
-                  const its = db.items.filter((i) => i.supplierId === s.id);
-                  return (
-                    <tr key={s.id} className="tr-click" onClick={() => openDialog({ kind: "supplier", supplier: s })}>
-                      <td>
-                        <span className="person-name">{s.name}</span>
-                      </td>
-                      <td data-label="Телефон">{s.phone ?? "—"}</td>
-                      <td data-label="Платьев" className="num">
-                        {its.length}
-                      </td>
-                      <td data-label="Модели">{[...new Set(its.map((i) => i.model))].join(", ")}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      </>
     </div>
   );
 }

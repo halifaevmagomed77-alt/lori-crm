@@ -937,3 +937,9 @@ button.mini-row:hover { background: var(--sand); }
 .money-input select { width: auto; flex: none; min-height: 42px; border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 0 10px; background: var(--canvas); font-weight: 600; }
 .field .money-input select { width: auto; }
 .money-sign { display: grid; place-items: center; padding: 0 14px; border-left: 1px solid var(--line); background: var(--canvas); color: var(--ink-2); font-weight: 600; }
+
+/* Поставщик в форме платья */
+.supplier-row select { flex: 1; min-width: 0; }
+.supplier-row .btn, .supplier-actions .btn { min-height: 42px; }
+.supplier-actions { flex-wrap: wrap; }
+.supplier-del { margin-left: auto; }
