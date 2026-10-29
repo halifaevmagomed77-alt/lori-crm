@@ -16,13 +16,17 @@ const ddmmyyyy = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0,
  * дата и имя сверху, «Новая запись», поля записи и «Отправить на подтверждение».
  */
 export function ConsultantBook() {
-  const { db, user, logout } = useStore();
+  const { db, user, logout, open } = useStore();
   const [writing, setWriting] = useState(false);
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(10);
   const t = today();
   const I = idx(db);
 
+  // все, кого консультант встретила сегодня — и с записью, и без залога
+  const met = db.visits
+    .filter((v) => v.date === t && (v.consultantId === user?.id || v.servedBy === user?.id))
+    .sort((a, b) => b.time.localeCompare(a.time));
   const todays = db.bookings.filter((b) => b.createdAt === t).sort((a, b) => b.depositNo - a.depositNo);
   const all = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -64,6 +68,38 @@ export function ConsultantBook() {
           <Icon name="plus" size={20} /> Новая запись
         </button>
       )}
+
+      <section className="cbook-section" aria-label="Сегодня встретила">
+        <h2 className="cbook-title">
+          Сегодня встретила <span className="today-count">{met.length}</span>
+        </h2>
+        {met.length ? (
+          <ul className="met-list">
+            {met.map((v) => {
+              const br = I.bride.get(v.brideId);
+              const booked = db.bookings.some((k) => k.brideId === v.brideId && k.createdAt === t);
+              return (
+                <li key={v.id}>
+                  <button type="button" className="met-row" onClick={() => open({ kind: "bride", id: v.brideId })}>
+                    <span className="met-time tabular">{v.time}</span>
+                    <span className="met-main">
+                      <strong>{br?.name ?? "—"}</strong>
+                      <span className="muted small">
+                        {br?.phones[0] ?? "без телефона"}
+                        {v.dressIds.length ? ` · мерила ${v.dressIds.map((id) => I.item.get(id)?.model).filter(Boolean).join(", ")}` : ""}
+                        {v.returning ? " · возвратная" : ""}
+                      </span>
+                    </span>
+                    <span className={`met-tag${booked ? " is-booked" : ""}`}>{booked ? "запись" : "без залога"}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="muted small">Сегодня ещё никого не встретили.</p>
+        )}
+      </section>
 
       <section className="cbook-section" aria-label="Сегодня записали">
         <h2 className="cbook-title">
@@ -141,18 +177,29 @@ function EntryForm({ onDone }: { onDone: () => void }) {
   const takenNo = depositNo.trim() ? db.bookings.find((k) => (k.contractDeposit ?? "").trim() === depositNo.trim()) : undefined;
   const pastEvent = !!event && event < today();
 
-  const errors = {
-    name: !picked && !name.trim() ? "Укажите ФИО" : "",
-    phone: !picked && !phone.trim() ? "Укажите телефон" : dup ? "Этот номер уже в базе — выберите невесту выше" : "",
-    item: !item ? "Выберите платье" : conflict ? "Платье занято на эти даты" : "",
-    event: !event ? "Укажите дату свадьбы" : pastEvent ? "Дата уже прошла" : "",
-    sum: !Number(sum) ? "Укажите сумму" : "",
-    deposit: !Number(deposit) ? "Укажите залог" : "",
-    depositNo: takenNo ? "Такой номер уже есть" : "",
-  };
+  // Залог внесён → это запись (договор), уходит владельцу на подтверждение.
+  // Без залога → только визит: невеста пришла, померила, ушла. Хватает имени или телефона.
+  const hasMoney = Number(deposit) > 0;
+  const errors = hasMoney
+    ? {
+        name: !picked && !name.trim() ? "Укажите ФИО" : "",
+        phone: !picked && !phone.trim() ? "Укажите телефон" : dup ? "Этот номер уже в базе — выберите невесту выше" : "",
+        item: !item ? "Выберите платье" : conflict ? "Платье занято на эти даты" : "",
+        event: !event ? "Укажите дату свадьбы" : pastEvent ? "Дата уже прошла" : "",
+        sum: !Number(sum) ? "Укажите сумму" : "",
+        depositNo: takenNo ? "Такой номер уже есть" : "",
+      }
+    : {
+        name: !picked && !name.trim() && !phone.trim() ? "Укажите имя или телефон" : "",
+        phone: dup ? "Этот номер уже в базе — выберите невесту выше" : "",
+        item: "",
+        event: pastEvent ? "Дата уже прошла" : "",
+        sum: "",
+        depositNo: "",
+      };
   const ok = Object.values(errors).every((e) => !e);
   // «обязательное поле» — только после попытки отправить; дубль, занятое платье и прошедшая дата — сразу
-  const instant = { phone: !!dup, item: !!conflict, depositNo: !!takenNo, event: pastEvent } as Record<string, boolean>;
+  const instant = { phone: !!dup, item: hasMoney && !!conflict, depositNo: !!takenNo, event: pastEvent } as Record<string, boolean>;
   const err = (k: keyof typeof errors) => (tried || instant[k] ? errors[k] : "");
 
   const pickItem = (id: string) => {
@@ -164,6 +211,16 @@ function EntryForm({ onDone }: { onDone: () => void }) {
   const submit = () => {
     setTried(true);
     if (!ok || !user) return;
+    if (!hasMoney) {
+      // визит без залога: карточка невесты + «Зашли», запись (договор) не создаётся
+      const b =
+        picked ??
+        saveBride({ name: name.trim() || "Без имени", phones: phone.trim() ? [phone.trim()] : [], eventDate: event || undefined, consultantId: user.id, notes: "" });
+      addVisit({ brideId: b.id, date: today(), time: new Date().toTimeString().slice(0, 5), tried: !!item, dressIds: item ? [item] : [], notes: notes.trim(), consultantId: user.id });
+      toast("Визит записан — без залога");
+      onDone();
+      return;
+    }
     const bride =
       picked ??
       saveBride({ name: name.trim(), phones: [phone.trim()], eventDate: event, consultantId: user.id, notes: visited ? "" : "Онлайн-запись без визита в салон" });
@@ -213,7 +270,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
       {picked && hist ? (
         <div className="returning-box" role="status">
           <p className="returning-tag">
-            <Icon name="reset" size={16} /> Возвратная невеста · {hist.count + (visited ? 1 : 0)}-й визит
+            <Icon name="reset" size={16} /> Возвратная невеста · {hist.count + (visited || !hasMoney ? 1 : 0)}-й визит
           </p>
           <p className="returning-name">{picked.name}</p>
           <p className="returning-meta">
@@ -298,7 +355,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
       <Line label="Сумма" error={err("sum")}>
         <Money value={sum} onChange={setSum} />
       </Line>
-      <Line label="Залог" error={err("deposit")} group>
+      <Line label="Залог" group>
         <span className="ef-pair">
           <Money value={deposit} onChange={setDeposit} label="Залог" />
           <select value={payWay} onChange={(e) => setPayWay(e.target.value)} aria-label="Как оплатили залог">
@@ -340,10 +397,12 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <label className="check small">
-        <input type="checkbox" checked={visited} onChange={(e) => setVisited(e.target.checked)} />
-        <span>Невеста была в салоне (снимите галочку, если запись онлайн)</span>
-      </label>
+      {hasMoney && (
+        <label className="check small">
+          <input type="checkbox" checked={visited} onChange={(e) => setVisited(e.target.checked)} />
+          <span>Невеста была в салоне (снимите галочку, если запись онлайн)</span>
+        </label>
+      )}
 
       {Number(sum) > 0 && Number(deposit) > 0 && (
         <p className="ef-summary">
@@ -351,9 +410,18 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         </p>
       )}
 
-      <button type="button" className="btn btn-block btn-red cbook-send" onClick={submit}>
-        Отправить на подтверждение
-      </button>
+      {hasMoney ? (
+        <button type="button" className="btn btn-block btn-red cbook-send" onClick={submit}>
+          Отправить на подтверждение
+        </button>
+      ) : (
+        <>
+          <button type="button" className="btn btn-block cbook-send" onClick={submit}>
+            Записать
+          </button>
+          <p className="ef-hint ef-hint-in">Без залога сохранится визит: имя или телефон, что мерила и комментарий. Владелец увидит, что невеста приходила. Внесёте залог — кнопка сменится на «Отправить на подтверждение».</p>
+        </>
+      )}
       {tried && !ok && <p className="field-error">Заполните отмеченные поля</p>}
     </section>
   );
