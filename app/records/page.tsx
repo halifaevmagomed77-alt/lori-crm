@@ -12,14 +12,14 @@ import type { BookingStatus } from "@/lib/types";
 type Range = "30" | "90" | "365" | "all" | "custom";
 
 export default function RecordsPage() {
-  const { db, can, open, user } = useStore();
+  const { db, can, open } = useStore();
   const I = idx(db);
   const [range, setRange] = useState<Range>("90");
   const [from, setFrom] = useState(addDays(today(), -30));
   const [to, setTo] = useState(today());
   const [dateBy, setDateBy] = useState<"createdAt" | "eventDate">("createdAt");
   const [status, setStatus] = useState<BookingStatus | "all" | "overdue">("all");
-  const [cons, setCons] = useState(user?.role === "employee" ? user.id : "all");
+  const [cons, setCons] = useState("all");
   const [model, setModel] = useState("");
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
@@ -90,6 +90,8 @@ export default function RecordsPage() {
           />
         }
       />
+
+      <TodayRecords />
 
       <div className="search-input book-search">
         <Icon name="search" size={18} />
@@ -231,5 +233,43 @@ export default function RecordsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Кто и кого записал сегодня — видят все консультанты, чтобы не оформить одно платье дважды */
+function TodayRecords() {
+  const { db, open } = useStore();
+  const I = idx(db);
+  const t = today();
+  const list = db.bookings.filter((b) => b.createdAt === t).sort((a, b) => b.depositNo - a.depositNo);
+  return (
+    <section className="today-records" aria-label="Сегодня записали">
+      <h2 className="today-title">
+        Сегодня записали <span className="today-count">{list.length}</span>
+      </h2>
+      {list.length ? (
+        <ul className="today-list">
+          {list.map((b) => {
+            const it = I.item.get(b.itemId);
+            return (
+              <li key={b.id}>
+                <button type="button" className="today-row" onClick={() => open({ kind: "booking", id: b.id })}>
+                  <span className="today-no">№ {b.depositNo}</span>
+                  <span className="today-main">
+                    <strong>{shortName(I.bride.get(b.brideId)?.name ?? "—")}</strong>
+                    <span>
+                      {it ? `${it.model}, р. ${it.size}` : "—"} · выдача {fmtShort(b.issueDate)}–{fmtShort(b.returnDate)}
+                    </span>
+                  </span>
+                  <span className="today-cons">{I.staff.get(b.consultantId)?.name ?? "—"}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="muted small">Сегодня ещё никого не записали.</p>
+      )}
+    </section>
   );
 }

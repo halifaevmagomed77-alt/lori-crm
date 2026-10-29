@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TEST_ACCOUNTS } from "@/lib/seed";
 import { useStore, type Permission } from "@/lib/store";
 import { ROLE_LABEL } from "@/lib/types";
@@ -15,7 +15,7 @@ type NavItem = { href: string; label: string; short?: string; icon: string; need
 
 /** Пять блоков по порядку владельца: журнал, книга записей, редактор, табель, отчёты */
 const NAV: NavItem[] = [
-  { href: "/", label: "Журнал", icon: "book" },
+  { href: "/", label: "Журнал", icon: "book", need: "editAll" },
   { href: "/records", label: "Книга записей", short: "Книга записей", icon: "file" },
   { href: "/brides", label: "Редактор", icon: "edit", need: "editAll", also: ["/dresses", "/cleaning"] },
   { href: "/timesheet", label: "Табель", icon: "clock", need: "attendance" },
@@ -25,6 +25,12 @@ const NAV: NavItem[] = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const { user, can, openDialog, toasts, logout } = useStore();
+  const router = useRouter();
+  // у консультанта нет журнала: его главная страница — «Книга записей»
+  const home = user && !can("editAll") ? "/records" : "/";
+  useEffect(() => {
+    if (user && path === "/" && home !== "/") router.replace(home);
+  }, [user, path, home, router]);
 
   // табель для планшета — отдельное приложение со своим входом, без меню CRM
   if (path.startsWith("/tabel")) return <>{children}</>;
@@ -41,9 +47,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const label = (n: NavItem) => n.label;
 
   return (
-    <div className="app">
+    <div className={`app${nav.length > 1 ? "" : " no-tabbar"}`}>
       <aside className="sidebar">
-        <Link href="/" className="brand" aria-label="Lori CRM, журнал">
+        <Link href={home} className="brand" aria-label="Lori CRM, главная">
           <span className="wordmark">LORI</span>
           <span className="brand-sub">журнал салона</span>
         </Link>
@@ -72,7 +78,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <header className="topbar">
-        <Link href="/" className="wordmark">
+        <Link href={home} className="wordmark">
           LORI
         </Link>
         <button type="button" className="me-mini" onClick={logout} aria-label="Сменить пользователя">
@@ -83,7 +89,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <main className="main" id="main">
         {allowed ? (
           children
-        ) : (
+        ) : path === "/" && home !== "/" ? null : (
           <div className="page">
             <p className="empty-title">Этот раздел недоступен для роли «{ROLE_LABEL[user.role]}».</p>
           </div>
@@ -97,6 +103,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
+      {nav.length > 1 && (
       <nav className="tabbar" aria-label="Разделы">
         {nav.map((n) => (
           <Link key={n.href} href={n.href} aria-current={isActive(n) ? "page" : undefined}>
@@ -105,6 +112,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Link>
         ))}
       </nav>
+      )}
 
       <SheetHost />
       <DialogHost />

@@ -198,6 +198,7 @@ function ItemPicker({
         {list.map((i) => {
           const on = selected.includes(i.id);
           const conflict = from && to ? itemConflict(db, i.id, from, to, ignoreBooking) : undefined;
+          const cleaning = !conflict && db.cleanings.some((c) => c.itemId === i.id && !c.backAt);
           return (
             <li key={i.id}>
               <button
@@ -217,7 +218,9 @@ function ItemPicker({
                 </span>
                 <span className="dress-pick-name">{i.model}</span>
                 <span className="dress-pick-meta">
-                  {conflict ? `занято ${fmtShort(conflict.issueDate)}–${fmtShort(conflict.returnDate)}` : `р. ${i.size} · ${rub(i.rentPrice)}`}
+                  {conflict
+                    ? `занято ${fmtShort(conflict.issueDate)}–${fmtShort(conflict.returnDate)}`
+                    : `р. ${i.size} · ${rub(i.rentPrice)}${cleaning ? " · в химчистке" : ""}`}
                 </span>
               </button>
             </li>
@@ -436,6 +439,22 @@ function BookingForm({
   const conflict = item ? itemConflict(db, item, issue, ret, booking?.id) : undefined;
   const conflictBride = conflict ? I.bride.get(conflict.brideId) : undefined;
 
+  /* ---- защита от двойных записей ---- */
+  // онлайн-невеста с телефоном, который уже есть в базе
+  const nbDigits = nbPhone.replace(/\D/g, "").slice(-10);
+  const nbDup = online && !booking && nbDigits.length >= 10 ? db.brides.find((x) => x.phones.some((p) => p.replace(/\D/g, "").endsWith(nbDigits))) : undefined;
+  // у этой невесты уже есть действующая запись
+  const selBrideId = online && !booking ? nbDup?.id : bride;
+  const activeOther = selBrideId
+    ? db.bookings.find((k) => k.brideId === selBrideId && k.id !== booking?.id && (k.status === "booked" || k.status === "issued"))
+    : undefined;
+  // платье сейчас в химчистке, а выдача скоро
+  const inCleaning = item ? db.cleanings.find((c) => c.itemId === item && !c.backAt) : undefined;
+  const cleaningRisk = inCleaning && issue <= addDays(today(), 3);
+  // даты в прошлом — только для новой записи
+  const pastIssue = !booking && issue < today();
+  const pastEvent = !booking && event < today();
+
   const setEventDate = (v: string) => {
     setEvent(v);
     setIssue(addDays(v, -1));
@@ -449,10 +468,10 @@ function BookingForm({
 
   const submit = () => {
     setTried(true);
-    if (!item || !rent || !deposit || conflict || ret < issue) return;
+    if (!item || !rent || !deposit || conflict || ret < issue || pastIssue || pastEvent) return;
     let sel = b;
     if (online && !booking) {
-      if (!nbName.trim() || !nbPhone.trim()) return;
+      if (!nbName.trim() || !nbPhone.trim() || nbDup) return;
       sel = saveBride({ name: nbName.trim(), phones: [nbPhone.trim()], eventDate: event, consultantId: nbCons, notes: "Онлайн-запись без визита в салон" });
     }
     if (!sel) return;
@@ -522,6 +541,24 @@ function BookingForm({
           <Field label="Телефон" error={tried && !nbPhone.trim() ? "Укажите телефон" : undefined}>
             <input value={nbPhone} onChange={(e) => setNbPhone(e.target.value)} inputMode="tel" />
           </Field>
+          {nbDup && (
+            <p className="callout callout-info grid-span" role="alert">
+              <Icon name="alert" size={18} />
+              <span>
+                Этот номер уже есть: <strong>{nbDup.name}</strong>, консультант {I.staff.get(nbDup.consultantId)?.name}.{" "}
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => {
+                    setOnline(false);
+                    setBride(nbDup.id);
+                  }}
+                >
+                  Это она — записать её
+                </button>
+              </span>
+            </p>
+          )}
           <Field label="Консультант">
             <select value={nbCons} onChange={(e) => setNbCons(e.target.value)} disabled={user?.role === "employee"}>
               {consultants.map((c) => (
@@ -539,10 +576,10 @@ function BookingForm({
         </Field>
       )}
       <div className="grid-3">
-        <Field label="Дата мероприятия">
+        <Field label="Дата мероприятия" error={pastEvent ? "Дата уже прошла" : undefined}>
           <input type="date" value={event} onChange={(e) => setEventDate(e.target.value)} />
         </Field>
-        <Field label="Выдача">
+        <Field label="Выдача" error={pastIssue ? "Дата уже прошла" : undefined}>
           <input type="date" value={issue} onChange={(e) => setIssue(e.target.value)} />
         </Field>
         <Field label="Возврат" error={ret < issue ? "Раньше выдачи" : undefined}>
@@ -556,7 +593,21 @@ function BookingForm({
         <p className="callout callout-bad" role="alert">
           <Icon name="alert" size={18} />
           Этот экземпляр занят с {fmtDate(conflict.issueDate)} по {fmtDate(conflict.returnDate)}
-          {conflictBride ? ` — ${shortName(conflictBride.name)}` : ""}. Выберите другой экземпляр или даты.
+          {conflictBride ? ` — ${shortName(conflictBride.name)}` : ""}
+          {conflict ? `, записала ${I.staff.get(conflict.consultantId)?.name ?? "—"}` : ""}. Выберите другой экземпляр или даты.
+        </p>
+      )}
+      {cleaningRisk && (
+        <p className="callout callout-info" role="alert">
+          <Icon name="alert" size={18} />
+          Это платье сейчас в химчистке (отправлено {fmtShort(inCleaning.sentAt)}), а выдача {fmtShort(issue)}. Уточните у администратора, успеет ли оно вернуться.
+        </p>
+      )}
+      {activeOther && (
+        <p className="callout callout-info" role="alert">
+          <Icon name="alert" size={18} />
+          У этой невесты уже есть запись № {activeOther.depositNo}: {I.item.get(activeOther.itemId)?.model}, свадьба {fmtShort(activeOther.eventDate)}, записала{" "}
+          {I.staff.get(activeOther.consultantId)?.name}. Проверьте, не дубль ли это.
         </p>
       )}
       <div className="grid-3">
