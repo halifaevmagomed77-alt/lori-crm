@@ -5,7 +5,7 @@ import { addDays, diffDays, fmtDate, fmtShort, today } from "@/lib/dates";
 import { idx, isOverdue, itemConflict, itemState, paid, rub, shortName } from "@/lib/derive";
 import { deletePhoto, savePhoto, usePhoto } from "@/lib/photos";
 import { useStore } from "@/lib/store";
-import { MAX_EMPLOYEES, ROLE_LABEL, type Booking, type Bride, type DressItem, type Payment, type Role, type Staff, type Supplier } from "@/lib/types";
+import { CURRENCIES, MAX_EMPLOYEES, ROLE_LABEL, type Booking, type Bride, type Currency, type DressItem, type Payment, type Role, type Staff, type Supplier } from "@/lib/types";
 import { FeedbackForm } from "./Demo";
 import { Field, Icon, Modal, Segmented } from "./ui";
 
@@ -1012,6 +1012,64 @@ function DangerZone({ label, note, confirmText, onConfirm, children }: { label: 
 
 /* ---------- Поступление платья (только владелец) ---------- */
 
+/** Сумма с выбором валюты; без onCurrency — только рубли */
+function MoneyInput({
+  value,
+  onChange,
+  currency = "RUB",
+  onCurrency,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  currency?: Currency;
+  onCurrency?: (c: Currency) => void;
+  label?: string;
+}) {
+  return (
+    <span className="money-input">
+      <input type="number" inputMode="numeric" value={value} onChange={(e) => onChange(e.target.value)} />
+      {onCurrency ? (
+        <select value={currency} onChange={(e) => onCurrency(e.target.value as Currency)} aria-label={label}>
+          {CURRENCIES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.sign}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="money-sign" aria-hidden="true">
+          ₽
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Курс к рублю — чтобы отчёты посчитали окупаемость закупки в валюте */
+function RatesField({ currencies }: { currencies: ("EUR" | "USD")[] }) {
+  const { db, setRate } = useStore();
+  return (
+    <div className="rates">
+      {currencies.map((c) => (
+        <label key={c} className="field-inline">
+          <span className="small">Курс для отчётов: 1 {c === "EUR" ? "€" : "$"} =</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={db.rates?.[c] ?? ""}
+            onChange={(e) => setRate(c, Number(e.target.value))}
+            aria-label={`Курс ${c}`}
+            placeholder="0"
+          />
+          <span className="small">₽</span>
+        </label>
+      ))}
+      <p className="field-hint">Курс общий для всех платьев. По нему закупка переводится в рубли в отчётах «окупилось» и «у кого выгоднее брать».</p>
+    </div>
+  );
+}
+
 function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) {
   const { db, saveItem, removeItem, toast, openDialog, open, closeSheet } = useStore();
   const models = [...new Set(db.items.map((i) => i.model))].sort();
@@ -1019,7 +1077,9 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
   const [size, setSize] = useState(item?.size ?? "44");
   const [supplier, setSupplier] = useState(item?.supplierId ?? db.suppliers[0]?.id ?? "");
   const [purchase, setPurchase] = useState(String(item?.purchasePrice || ""));
+  const [purchaseCur, setPurchaseCur] = useState<Currency>(item?.purchaseCurrency ?? "RUB");
   const [cost, setCost] = useState(String(item?.cost || ""));
+  const [costCur, setCostCur] = useState<Currency>(item?.costCurrency ?? "RUB");
   const [rent, setRent] = useState(String(item?.rentPrice || ""));
   const [received, setReceived] = useState(item?.receivedAt ?? today());
   const [photo, setPhoto] = useState(item?.photo);
@@ -1046,7 +1106,9 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
               size,
               supplierId: supplier,
               purchasePrice: Number(purchase) || 0,
+              purchaseCurrency: purchaseCur,
               cost: Number(cost) || 0,
+              costCurrency: costCur,
               rentPrice: Number(rent),
               receivedAt: received,
               photo,
@@ -1096,17 +1158,18 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
           </button>
         </div>
       </Field>
-      <div className="grid-3">
-        <Field label="Закупка, ₽" hint="Только владелец">
-          <input type="number" inputMode="numeric" value={purchase} onChange={(e) => setPurchase(e.target.value)} />
+      <div className="grid-3 price-row">
+        <Field label="Закупка" hint="Только владелец">
+          <MoneyInput value={purchase} onChange={setPurchase} currency={purchaseCur} onCurrency={setPurchaseCur} label="Валюта закупки" />
         </Field>
-        <Field label="Стоимость платья, ₽" hint="Пишется в договоре">
-          <input type="number" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} />
+        <Field label="Стоимость платья" hint="Пишется в договоре">
+          <MoneyInput value={cost} onChange={setCost} currency={costCur} onCurrency={setCostCur} label="Валюта стоимости" />
         </Field>
-        <Field label="Цена аренды, ₽" error={tried && !rent ? "Укажите цену" : undefined}>
-          <input type="number" inputMode="numeric" value={rent} onChange={(e) => setRent(e.target.value)} />
+        <Field label="Цена аренды" hint="Невеста платит в рублях" error={tried && !rent ? "Укажите цену" : undefined}>
+          <MoneyInput value={rent} onChange={setRent} />
         </Field>
       </div>
+      {[purchaseCur, costCur].filter((c) => c !== "RUB").length > 0 && <RatesField currencies={[...new Set([purchaseCur, costCur].filter((c): c is "EUR" | "USD" => c !== "RUB"))]} />}
       {item && (
         <DangerZone
           label={used ? "Снять с проката" : "Удалить платье"}

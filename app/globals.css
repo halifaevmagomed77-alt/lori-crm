@@ -927,3 +927,15 @@ button.mini-row:hover { background: var(--sand); }
 .modal-body .segmented-item { white-space: normal; line-height: 1.2; min-height: 44px; padding: 6px 8px; }
 .dress-pick-grid > li.muted { grid-column: 1 / -1; }
 .kadm-reset { justify-self: start; color: var(--stone); }
+
+/* Цены платья: три поля на одной линии, валюта рядом с суммой */
+.price-row { align-items: start; }
+.money-input { display: flex; align-items: stretch; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; overflow: hidden; }
+.money-input:focus-within { outline: 2px solid var(--gold); outline-offset: -1px; }
+.field .money-input input { border: 0; border-radius: 0; min-width: 0; flex: 1; outline: 0; }
+.field .money-input input:focus { outline: 0; }
+.money-input select { width: auto; flex: none; min-height: 42px; border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 0 10px; background: var(--canvas); font-weight: 600; }
+.field .money-input select { width: auto; }
+.money-sign { display: grid; place-items: center; padding: 0 14px; border-left: 1px solid var(--line); background: var(--canvas); color: var(--ink-2); font-weight: 600; }
+.rates { display: grid; gap: 6px; padding: 12px 14px; border-radius: 10px; background: var(--sand); }
+.rates input { width: 110px; min-height: 38px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 10px; }

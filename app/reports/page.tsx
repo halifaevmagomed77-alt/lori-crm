@@ -12,6 +12,7 @@ import {
   bySupplier,
   cleaningByModel,
   finesStats,
+  fmtMoney,
   funnel,
   idx,
   modelSupplierCompare,
@@ -427,7 +428,7 @@ export default function ReportsPage() {
                         <li key={r.item.id} className={i === 0 && r.payback > 0 ? "is-best" : undefined}>
                           <span className="compare-sup">{r.supplier.name}</span>
                           <span className="compare-nums">
-                            закупка {rub(r.item.purchasePrice)} · выдано {r.issued} · окупилось <strong>{Math.round(r.payback * 100)}%</strong>
+                            закупка {fmtMoney(r.item.purchasePrice, r.item.purchaseCurrency)} · выдано {r.issued} · окупилось <strong>{Math.round(r.payback * 100)}%</strong>
                           </span>
                         </li>
                       ))}

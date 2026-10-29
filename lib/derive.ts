@@ -1,5 +1,22 @@
 import { addDays, addMonths, diffDays, fmtShort, monthShort, startOfMonth, startOfWeek, today } from "./dates";
-import type { Booking, DB, DateStr, DressItem, Payment, Staff } from "./types";
+import { CURRENCIES, type Booking, type Currency, type DB, type DateStr, type DressItem, type Payment, type Staff } from "./types";
+
+/** Сумма в своей валюте: «7 000 €», «120 000 ₽» */
+export function fmtMoney(n: number, cur: Currency = "RUB"): string {
+  if (cur === "RUB") return rub(n);
+  const sign = CURRENCIES.find((c) => c.value === cur)?.sign ?? cur;
+  return `${Math.round(n).toLocaleString("ru-RU")} ${sign}`;
+}
+
+/** Перевод в рубли по курсу владельца; null — курс не указан */
+export function toRub(db: DB, n: number, cur: Currency = "RUB"): number | null {
+  if (cur === "RUB") return n;
+  const r = db.rates?.[cur];
+  return r ? n * r : null;
+}
+
+/** Закупка экземпляра в рублях (0, если курс не указан) */
+export const purchaseRub = (db: DB, i: DressItem) => toRub(db, i.purchasePrice, i.purchaseCurrency) ?? 0;
 
 export function rub(n: number): string {
   return `${Math.round(n).toLocaleString("ru-RU")} ₽`;
@@ -248,7 +265,7 @@ export function bySupplier(db: DB, p: Period) {
       const ids = new Set(items.map((i) => i.id));
       const issued = db.bookings.filter((b) => ids.has(b.itemId) && inP(b.issuedAt, p));
       const revenue = issued.reduce((sum, b) => sum + b.rentPrice + b.extra, 0);
-      const purchase = items.reduce((sum, i) => sum + i.purchasePrice, 0);
+      const purchase = items.reduce((sum, i) => sum + purchaseRub(db, i), 0);
       const models = new Map<string, number>();
       issued.forEach((b) => {
         const model = I.item.get(b.itemId)!.model;
@@ -271,7 +288,7 @@ export function modelSupplierCompare(db: DB, p: Period) {
       rows: list.map((i) => {
         const issued = db.bookings.filter((b) => b.itemId === i.id && inP(b.issuedAt, p));
         const revenue = issued.reduce((s, b) => s + b.rentPrice + b.extra, 0);
-        return { item: i, supplier: idx(db).supplier.get(i.supplierId)!, issued: issued.length, revenue, payback: i.purchasePrice ? revenue / i.purchasePrice : 0 };
+        return { item: i, supplier: idx(db).supplier.get(i.supplierId)!, issued: issued.length, revenue, payback: purchaseRub(db, i) ? revenue / purchaseRub(db, i) : 0 };
       }),
     }));
 }

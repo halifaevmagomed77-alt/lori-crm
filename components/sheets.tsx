@@ -1,7 +1,7 @@
 "use client";
 
 import { fmtDate, fmtShort, relDay, today } from "@/lib/dates";
-import { ITEM_STATE_LABEL, STATUS_LABEL, idx, isOverdue, itemState, paid, rub, shortName } from "@/lib/derive";
+import { ITEM_STATE_LABEL, STATUS_LABEL, fmtMoney, idx, isOverdue, itemState, paid, purchaseRub, rub, shortName } from "@/lib/derive";
 import { useStore } from "@/lib/store";
 import { PAY_KIND_LABEL, type Booking, type Bride, type DressItem, type Payment } from "@/lib/types";
 import { DressPhoto } from "./forms";
@@ -465,7 +465,9 @@ function ItemCard({ it }: { it: DressItem }) {
         </div>
         <div className="line">
           <dt>Стоимость</dt>
-          <dd className="tabular">{rub(it.cost)} <span className="muted">· для договора</span></dd>
+          <dd className="tabular">
+            {fmtMoney(it.cost, it.costCurrency)} <span className="muted">· для договора</span>
+          </dd>
         </div>
         <div className="line">
           <dt>Выдавали</dt>
@@ -482,8 +484,9 @@ function ItemCard({ it }: { it: DressItem }) {
             <div className="line line-owner">
               <dt>Закупка</dt>
               <dd className="tabular">
-                {rub(it.purchasePrice)} · принесло {rub(revenue)}
-                {it.purchasePrice > 0 && <span className="muted"> · окупилось на {Math.round((revenue / it.purchasePrice) * 100)}%</span>}
+                {fmtMoney(it.purchasePrice, it.purchaseCurrency)} · принесло {rub(revenue)}
+                {purchaseRub(db, it) > 0 && <span className="muted"> · окупилось на {Math.round((revenue / purchaseRub(db, it)) * 100)}%</span>}
+                {it.purchasePrice > 0 && !purchaseRub(db, it) && <span className="muted"> · укажите курс, чтобы посчитать окупаемость</span>}
               </dd>
             </div>
           </>

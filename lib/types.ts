@@ -34,6 +34,14 @@ export type Attendance = {
 /** Видно только владельцу */
 export type Supplier = { id: ID; name: string; phone?: string };
 
+/** Валюта закупки и стоимости платья. Аренда и все оплаты — всегда в рублях. */
+export type Currency = "RUB" | "EUR" | "USD";
+export const CURRENCIES: { value: Currency; sign: string }[] = [
+  { value: "RUB", sign: "₽" },
+  { value: "EUR", sign: "€" },
+  { value: "USD", sign: "$" },
+];
+
 /** Конкретный экземпляр платья. Одна модель может прийти от разных поставщиков. */
 export type DressItem = {
   id: ID;
@@ -41,6 +49,8 @@ export type DressItem = {
   size: string;
   supplierId: ID; // только владелец; "" — не указан
   purchasePrice: number; // закупка, только владелец
+  purchaseCurrency?: Currency; // по умолчанию рубли
+  costCurrency?: Currency; // по умолчанию рубли
   cost: number; // «стоимость платья» из договора — для компенсации ущерба
   rentPrice: number; // базовая цена проката
   receivedAt: DateStr;
@@ -140,6 +150,7 @@ export type Cleaning = { id: ID; itemId: ID; bookingId?: ID; sentAt: DateStr; ba
 export type DB = {
   version: 3;
   demo?: boolean; // в базе пример данных, а не реальная работа салона
+  rates?: Partial<Record<Currency, number>>; // курс к рублю для отчётов: закупка в евро/долларах
   staff: Staff[];
   attendance: Attendance[];
   suppliers: Supplier[];
