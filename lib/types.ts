@@ -107,6 +107,7 @@ export type Booking = {
   rentPrice: number; // «Сумма»
   deposit: number; // «Залог», не возвращается при отказе
   extra: number; // «Доп»
+  extraNote?: string; // «Доп» словами: серьги, фата, фотосессия
   accessories: Accessory[];
   veil?: string;
   tasks: string[]; // подгонка: «пришить пуговицы», «вставка» и т. п.

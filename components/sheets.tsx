@@ -145,7 +145,8 @@ export function BookingCard({ b }: { b: Booking }) {
           <div className="line">
             <dt>Доп</dt>
             <dd className="tabular">
-              {b.extra ? rub(b.extra) : "—"}
+              {b.extra ? rub(b.extra) : b.extraNote ? "" : "—"}
+              {b.extraNote && <span className={b.extra ? "muted" : undefined}>{b.extra ? " · " : ""}{b.extraNote}</span>}
               {b.accessories.length > 0 && <span className="muted"> · {b.accessories.map((a) => a.name.toLowerCase()).join(", ")}</span>}
             </dd>
           </div>
@@ -314,13 +315,14 @@ export function RecordCard({ b }: { b: Booking }) {
         </span>
         <span>
           <i>Доп</i>
-          <b>{b.extra ? rub(b.extra) : "—"}</b>
+          <b>{b.extra ? rub(b.extra) : b.extraNote ? "" : "—"}</b>
         </span>
         <span>
           <i>Штраф</i>
           <b>{fines ? rub(fines) : "—"}</b>
         </span>
       </span>
+      {b.extraNote && <span className="rc-note">Доп: {b.extraNote}</span>}
       {b.notes && <span className="rc-note">{b.notes}</span>}
       {money.payments.length > 0 && (
         <span className="rc-pays">

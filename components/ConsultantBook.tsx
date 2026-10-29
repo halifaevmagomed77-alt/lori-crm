@@ -119,6 +119,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
   const [deposit, setDeposit] = useState("");
   const [payWay, setPayWay] = useState("Наличные");
   const [extra, setExtra] = useState("");
+  const [extraNote, setExtraNote] = useState("");
   const [fine, setFine] = useState("");
   const [fineWhy, setFineWhy] = useState("");
   const [rentNo, setRentNo] = useState("");
@@ -177,6 +178,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         rentPrice: Number(sum),
         deposit: Number(deposit),
         extra: Number(extra) || 0,
+        extraNote: extraNote.trim() || undefined,
         accessories: [],
         tasks: [],
         notes: notes.trim() || undefined,
@@ -268,8 +270,11 @@ function EntryForm({ onDone }: { onDone: () => void }) {
           </select>
         </span>
       </Line>
-      <Line label="Доп">
-        <Money value={extra} onChange={setExtra} placeholder="Аксессуары, фата, фотосессия" />
+      <Line label="Доп" group>
+        <span className="ef-pair">
+          <Money value={extra} onChange={setExtra} label="Доп, сумма" />
+          <input value={extraNote} onChange={(e) => setExtraNote(e.target.value)} placeholder="Что именно: серьги, фата, фотосессия…" aria-label="Доп, комментарий" />
+        </span>
       </Line>
       <Line label="Штраф" error={err("fine")} group>
         <span className="ef-pair">
