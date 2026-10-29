@@ -1154,3 +1154,18 @@ html, body { overflow-x: clip; }
 /* красные строки подтверждения — тот же цвет, обычный шрифт */
 .rc-pays > span, .pay-lines li, .entry-due { font-family: inherit; font-style: normal; font-size: 14px; }
 .line { grid-template-columns: 108px 1fr; padding: 10px 0; align-items: center; }
+
+/* Залог и остаток — отдельные блоки, у каждого своё подтверждение */
+.pay-block { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.pay-block-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--stone); }
+.pay-line.is-due .pay-what { color: var(--ink-2); }
+.rc-pays > span.is-due { color: var(--stone); }
+.confirm-group { display: grid; gap: 6px; }
+.confirm-group + .confirm-group { margin-top: 12px; }
+.confirm-sub { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-red); }
+.pay-lines { border-top: 0; }
+.pay-what, .confirm-text { font-family: inherit !important; font-style: normal !important; font-size: 15px; }
+@media (max-width: 520px) {
+  .confirm-row { flex-direction: column; align-items: stretch; }
+  .confirm-row .btn { margin-left: 0; width: 100%; min-height: 44px; }
+}

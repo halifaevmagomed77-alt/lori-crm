@@ -8,7 +8,7 @@ import { Chip, Empty, Icon, Segmented } from "@/components/ui";
 import { addDays, fmtShort, today } from "@/lib/dates";
 import { STATUS_LABEL, contractNo, idx, isOverdue, payText, rub, shortName } from "@/lib/derive";
 import { useStore } from "@/lib/store";
-import type { BookingStatus } from "@/lib/types";
+import type { BookingStatus, Payment } from "@/lib/types";
 
 type Range = "30" | "90" | "365" | "all" | "custom";
 
@@ -282,7 +282,13 @@ function TodayRecords() {
   );
 }
 
-/** Владелец: записи и оплаты, которые консультанты отправили на подтверждение */
+/** Владелец: оплаты, которые отправили на подтверждение. Залог и остаток — отдельными группами */
+const CONFIRM_GROUPS: { title: string; kinds: Payment["kind"][] }[] = [
+  { title: "Залог", kinds: ["deposit"] },
+  { title: "Остаток", kinds: ["balance"] },
+  { title: "Доп и штрафы", kinds: ["extra", "fine"] },
+];
+
 function ToConfirm() {
   const { db, open, confirmPayment, toast } = useStore();
   const I = idx(db);
@@ -293,33 +299,44 @@ function ToConfirm() {
       <h2 className="today-title confirm-title">
         Ждут подтверждения <span className="today-count">{list.length}</span>
       </h2>
-      <ul className="today-list">
-        {list.map((p) => {
-          const k = I.booking.get(p.bookingId);
-          return (
-            <li key={p.id} className="confirm-row">
-              <button type="button" className="today-row" onClick={() => open({ kind: "booking", id: p.bookingId })}>
-                <span className="today-no">№ {k ? contractNo(k) : "—"}</span>
-                <span className="today-main">
-                  <strong>{k ? shortName(I.bride.get(k.brideId)?.name ?? "—") : "—"}</strong>
-                  <span className="confirm-text">{payText(p)}</span>
-                </span>
-                <span className="today-cons">{I.staff.get(p.recordedBy)?.name ?? "—"}</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-small btn-red"
-                onClick={() => {
-                  confirmPayment(p.id);
-                  toast("Подтверждено");
-                }}
-              >
-                Подтвердить
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {CONFIRM_GROUPS.map((g) => {
+        const rows = list.filter((p) => g.kinds.includes(p.kind));
+        if (!rows.length) return null;
+        return (
+          <div key={g.title} className="confirm-group" role="group" aria-label={g.title}>
+            <h3 className="confirm-sub">
+              {g.title} <span className="today-count">{rows.length}</span>
+            </h3>
+            <ul className="today-list">
+              {rows.map((p) => {
+                const k = I.booking.get(p.bookingId);
+                return (
+                  <li key={p.id} className="confirm-row">
+                    <button type="button" className="today-row" onClick={() => open({ kind: "booking", id: p.bookingId })}>
+                      <span className="today-no">№ {k ? contractNo(k) : "—"}</span>
+                      <span className="today-main">
+                        <strong>{k ? shortName(I.bride.get(k.brideId)?.name ?? "—") : "—"}</strong>
+                        <span className="confirm-text">{payText(p)}</span>
+                      </span>
+                      <span className="today-cons">{I.staff.get(p.recordedBy)?.name ?? "—"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-small btn-red"
+                      onClick={() => {
+                        confirmPayment(p.id);
+                        toast(`${g.title}: подтверждено`);
+                      }}
+                    >
+                      Подтвердить {g.kinds[0] === "deposit" ? "залог" : g.kinds[0] === "balance" ? "остаток" : ""}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
     </section>
   );
 }

@@ -39,14 +39,14 @@ export function SheetHost() {
 
 /* ---------- Запись в тетради ---------- */
 
+const CONFIRM_WORD: Record<Payment["kind"], string> = { deposit: "Залог", balance: "Остаток", extra: "Доп", fine: "Штраф" };
+
 function PayLine({ p }: { p: Payment }) {
   const { db, can, confirmPayment, toast } = useStore();
   const who = idx(db).staff.get(p.recordedBy)?.name;
   return (
     <li className={`pay-line${p.kind === "fine" ? " is-fine" : ""}`}>
-      <span className="pay-what">
-        {payText(p)} / {p.confirmedAt ? "подтверждён" : "ждёт подтверждения"}
-      </span>
+      <span className="pay-what">{payText(p)}</span>
       <span className="pay-meta">
         {who && `внесла ${who}`}
         {p.confirmedAt && ` · владелец подтвердил ${fmtShort(p.confirmedAt)}`}
@@ -61,10 +61,10 @@ function PayLine({ p }: { p: Payment }) {
           className="btn btn-small btn-red"
           onClick={() => {
             confirmPayment(p.id);
-            toast("Получение оплаты подтверждено");
+            toast(`${CONFIRM_WORD[p.kind]}: получение подтверждено`);
           }}
         >
-          Подтвердить получение
+          Подтвердить {CONFIRM_WORD[p.kind].toLowerCase()}
         </button>
       ) : (
         <span className="stamp stamp-wait">ждёт подтверждения</span>
@@ -81,6 +81,9 @@ export function BookingCard({ b }: { b: Booking }) {
   const cons = I.staff.get(b.consultantId);
   const money = paid(db, b);
   const fines = money.payments.filter((p) => p.kind === "fine");
+  const deposits = money.payments.filter((p) => p.kind === "deposit");
+  const balances = money.payments.filter((p) => p.kind === "balance");
+  const others = money.payments.filter((p) => p.kind === "extra" || p.kind === "fine");
   // после сохранения консультант меняет только комментарий; запись правят администратор и владелец
   const canEdit = can("editAll");
   const overdue = isOverdue(b);
@@ -197,14 +200,46 @@ export function BookingCard({ b }: { b: Booking }) {
         </p>
       )}
 
-      <ul className="pay-lines" aria-label="Оплаты">
-        {money.payments.map((p) => (
-          <PayLine key={p.id} p={p} />
-        ))}
-        {money.payments.length === 0 && <li className="muted small">Оплат пока нет</li>}
-      </ul>
-      {b.status !== "refused" && money.due > 0 && (
-        <p className="entry-due">остаток {tr(money.due)}</p>
+      {/* Залог и остаток подтверждаются владельцем отдельно — как две подписи в журнале */}
+      <section className="pay-block" aria-label="Залог">
+        <h3 className="pay-block-title">Залог</h3>
+        <ul className="pay-lines">
+          {deposits.map((p) => (
+            <PayLine key={p.id} p={p} />
+          ))}
+          {deposits.length === 0 && <li className="muted small">Залог не внесён</li>}
+        </ul>
+      </section>
+
+      <section className="pay-block" aria-label="Остаток">
+        <h3 className="pay-block-title">Остаток</h3>
+        <ul className="pay-lines">
+          {balances.map((p) => (
+            <PayLine key={p.id} p={p} />
+          ))}
+          {b.status !== "refused" && money.due > 0 && (
+            <li className="pay-line is-due">
+              <span className="pay-what">остаток {tr(money.due)} / не оплачен</span>
+              {(b.status === "booked" || b.status === "issued") && (
+                <button type="button" className="btn btn-small" onClick={() => openDialog({ kind: "payment", bookingId: b.id, paymentKind: "balance" })}>
+                  Внести остаток
+                </button>
+              )}
+            </li>
+          )}
+          {balances.length === 0 && (b.status === "refused" || money.due === 0) && <li className="muted small">{b.status === "refused" ? "Отказ — остаток не берётся" : "Остатка нет"}</li>}
+        </ul>
+      </section>
+
+      {others.length > 0 && (
+        <section className="pay-block" aria-label="Доп и штрафы">
+          <h3 className="pay-block-title">Доп и штрафы</h3>
+          <ul className="pay-lines">
+            {others.map((p) => (
+              <PayLine key={p.id} p={p} />
+            ))}
+          </ul>
+        </section>
       )}
 
       {b.log.length > 0 && (
@@ -260,6 +295,8 @@ export function BookingCard({ b }: { b: Booking }) {
     </article>
   );
 }
+
+const PAY_ORDER: Record<Payment["kind"], number> = { deposit: 0, balance: 1, extra: 2, fine: 3 };
 
 /* ---------- Карточка в книге записей: половина экрана телефона ---------- */
 
@@ -335,14 +372,14 @@ export function RecordCard({ b }: { b: Booking }) {
       </span>
       <span className="rc-cons">кон. {staffShort(I.staff.get(b.consultantId)?.name ?? "—")}</span>
       {b.notes && <span className="rc-note">{b.notes}</span>}
-      {money.payments.length > 0 && (
+      {(money.payments.length > 0 || (b.status !== "refused" && money.due > 0)) && (
         <span className="rc-pays">
-          {money.payments.map((p) => (
+          {[...money.payments].sort((x, y) => PAY_ORDER[x.kind] - PAY_ORDER[y.kind]).map((p) => (
             <span key={p.id} className={p.confirmedAt ? "is-ok" : "is-wait"}>
               {payText(p)} / {p.confirmedAt ? "подтверждён" : "ждёт подтверждения"}
             </span>
           ))}
-          {b.status !== "refused" && money.due > 0 && <span className="is-ok">остаток {tr(money.due)}</span>}
+          {b.status !== "refused" && money.due > 0 && <span className="is-due">остаток {tr(money.due)} / не оплачен</span>}
         </span>
       )}
     </button>
