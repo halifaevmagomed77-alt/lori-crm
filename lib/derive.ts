@@ -21,6 +21,22 @@ export function pct(part: number, whole: number): string {
 }
 
 /** «Гасанова Хадижат Мурадовна» → «Гасанова Хадижат» */
+/** «Амина Алиева Билаловна» → «Амина А.Б.»; «Консультант 1» остаётся как есть */
+export function staffShort(full: string) {
+  const [first, ...rest] = full.trim().split(/\s+/);
+  const initials = rest.filter((w) => /^\p{L}/u.test(w)).map((w) => `${w[0].toUpperCase()}.`);
+  if (!initials.length || initials.length !== rest.length) return full;
+  return `${first} ${initials.join("")}`;
+}
+
+/** «30 т.р» — как пишут в тетради; не кратное тысяче — полностью */
+export function tr(n: number) {
+  return n % 1000 === 0 ? `${(n / 1000).toLocaleString("ru-RU")} т.р` : rub(n);
+}
+
+/** № договора: вписанный консультантом или внутренний номер */
+export const contractNo = (b: Booking) => b.contractDeposit || String(b.depositNo);
+
 export function shortName(full: string) {
   return full.split(" ").slice(0, 2).join(" ");
 }
@@ -342,4 +358,15 @@ export function workMinutes(a?: { in?: string; out?: string }) {
 export function fmtMinutes(min: number) {
   if (!min) return "";
   return `${Math.floor(min / 60)} ч${min % 60 ? ` ${min % 60} мин` : ""}`;
+}
+
+/* ---------- Красная строка оплаты, как в тетради ---------- */
+
+const PAY_WORD: Record<Payment["kind"], string> = { deposit: "Залог", balance: "Остаток", extra: "Доп", fine: "Штраф" };
+const ddmm = (d: DateStr) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+
+/** «Залог 30 т.р / ВТБ / 04.01» — без статуса; статус рисует штамп */
+export function payText(p: Payment) {
+  const how = p.method === "cash" ? "наличные" : p.bank ?? "перевод";
+  return `${PAY_WORD[p.kind]} ${tr(p.amount)}${p.reason ? ` (${p.reason.toLowerCase()})` : ""} / ${how} / ${ddmm(p.date)}`;
 }

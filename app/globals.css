@@ -963,3 +963,69 @@ button.mini-row:hover { background: var(--sand); }
   .no-tabbar .fab-group { bottom: calc(16px + env(safe-area-inset-bottom)); }
   .no-tabbar ~ * .toasts, .no-tabbar .toasts { bottom: 96px; }
 }
+
+/* =========================================================
+   Консультант — страница тетради
+   ========================================================= */
+.cbook { display: grid; gap: 16px; padding-top: 16px !important; }
+.cbook-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 12px; border-bottom: 1.5px solid var(--ink-blue); }
+.cbook-date { font-family: var(--serif); font-size: 28px; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cbook-wd { color: var(--stone); font-size: 15px; text-transform: capitalize; }
+.cbook-me { display: grid; justify-items: end; gap: 2px; }
+.cbook-name { font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink-blue); }
+.cbook-new { min-height: 56px; font-size: 17px; }
+.cbook-section { display: grid; gap: 10px; }
+.cbook-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--ink-blue); }
+
+.entry-form { display: grid; gap: 4px; color: var(--ink-blue); }
+.entry-form-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.entry-form-title { font-family: var(--serif); font-weight: 400; font-size: 26px; color: var(--ink); }
+.ef-line { display: grid; grid-template-columns: 118px 1fr; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(70, 110, 170, .18); }
+.ef-line-block { align-items: start; }
+.ef-label { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink-blue); line-height: 1.2; }
+.ef-field { display: grid; gap: 4px; min-width: 0; }
+.ef-field input, .ef-field select, .ef-field textarea {
+  width: 100%; min-height: 42px; border: 1px solid transparent; border-bottom-color: var(--line-strong); border-radius: 6px;
+  background: rgba(255,255,255,.85); padding: 6px 10px; font-size: 16px; color: var(--ink);
+}
+.ef-field input:focus, .ef-field select:focus, .ef-field textarea:focus { outline: 2px solid var(--gold); outline-offset: -1px; }
+.ef-field textarea { resize: vertical; }
+.has-error .ef-field input { border-bottom-color: var(--bad); }
+.ef-money { display: flex; align-items: center; gap: 6px; }
+.ef-money span { color: var(--stone); font-weight: 600; }
+.ef-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ef-picked { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; color: var(--ink); }
+.ef-hint { font-size: 12px; color: var(--stone); padding: 2px 0 4px 128px; }
+.ef-summary { padding: 10px 0 2px; color: var(--ink); }
+.entry-form .callout { margin: 6px 0; }
+.entry-form .check { margin-top: 10px; color: var(--ink-2); }
+.cbook-send { min-height: 56px; font-size: 17px; margin-top: 12px; }
+.entry-form .dress-pick-grid { max-height: 240px; }
+@media (max-width: 520px) {
+  .ef-line { grid-template-columns: 1fr; gap: 2px; }
+  .ef-hint { padding-left: 0; }
+  .ef-pair { grid-template-columns: 1fr 1fr; }
+}
+
+/* Красные строки оплат в карточке записи, как в тетради */
+.rc-pays { display: grid; gap: 2px; padding-top: 6px; border-top: 1.5px solid var(--ink-red); }
+.rc-pays > span { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-red); }
+.rc-pays > span.is-wait { opacity: .75; }
+.pay-what { font-size: 17px; }
+
+/* Владелец: ждут подтверждения */
+.confirm-block { margin-bottom: 14px; padding: 12px 14px; border-radius: 12px; background: var(--bad-bg); border: 1px solid #efc9c5; }
+.confirm-title { color: var(--ink-red); }
+.confirm-title .today-count { background: var(--ink-red); }
+.confirm-row { display: flex; gap: 8px; align-items: center; }
+.confirm-row .today-row { flex: 1; }
+.confirm-text { color: var(--ink-red) !important; font-family: var(--serif); font-style: italic; }
+@media (max-width: 520px) { .confirm-row { flex-wrap: wrap; } .confirm-row .btn { margin-left: auto; } }
+@media (max-width: 520px) {
+  .ef-line { grid-template-columns: 96px 1fr; gap: 8px; }
+  .ef-line-block { grid-template-columns: 1fr; }
+  .ef-label { font-size: 15px; }
+  .ef-hint { padding-left: 104px; }
+  .ef-pair { grid-template-columns: 1fr; gap: 4px; }
+}
+.entry-form .dress-pick-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 104px)); }

@@ -170,7 +170,7 @@ function BridePicker({ value, onChange }: { value?: string; onChange: (id?: stri
 
 /* ---------- Выбор модели / экземпляра ---------- */
 
-function ItemPicker({
+export function ItemPicker({
   selected,
   onToggle,
   multi,

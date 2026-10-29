@@ -1,9 +1,9 @@
 "use client";
 
 import { fmtDate, fmtShort, relDay, today } from "@/lib/dates";
-import { ITEM_STATE_LABEL, STATUS_LABEL, fmtMoney, idx, isOverdue, itemState, paid, purchaseRub, rub, shortName } from "@/lib/derive";
+import { ITEM_STATE_LABEL, STATUS_LABEL, contractNo, fmtMoney, idx, isOverdue, itemState, paid, payText, purchaseRub, rub, shortName, tr } from "@/lib/derive";
 import { useStore } from "@/lib/store";
-import { PAY_KIND_LABEL, type Booking, type Bride, type DressItem, type Payment } from "@/lib/types";
+import { type Booking, type Bride, type DressItem, type Payment } from "@/lib/types";
 import { DressPhoto } from "./forms";
 import { Chip, Drawer, Icon, type Tone } from "./ui";
 
@@ -42,16 +42,14 @@ export function SheetHost() {
 function PayLine({ p }: { p: Payment }) {
   const { db, can, confirmPayment, toast } = useStore();
   const who = idx(db).staff.get(p.recordedBy)?.name;
-  const method = p.method === "cash" ? "наличные" : p.bank ?? "перевод";
   return (
     <li className={`pay-line${p.kind === "fine" ? " is-fine" : ""}`}>
       <span className="pay-what">
-        {PAY_KIND_LABEL[p.kind].toLowerCase()} {rub(p.amount)}
-        {p.reason && <span className="pay-reason"> ({p.reason})</span>}
+        {payText(p)} / {p.confirmedAt ? "подтверждён" : "ждёт подтверждения"}
       </span>
       <span className="pay-meta">
-        {fmtShort(p.date)} · {method}
-        {who && ` · внесла ${who}`}
+        {who && `внесла ${who}`}
+        {p.confirmedAt && ` · владелец подтвердил ${fmtShort(p.confirmedAt)}`}
       </span>
       {p.confirmedAt ? (
         <span className="stamp" title={`Подтверждено владельцем ${fmtDate(p.confirmedAt)}`}>
@@ -160,8 +158,8 @@ export function BookingCard({ b }: { b: Booking }) {
           <div className="line">
             <dt>№</dt>
             <dd className="tabular">
-              залог {b.depositNo}
-              {b.rentNo ? ` · аренда ${b.rentNo}` : ""}
+              залог {contractNo(b)}
+              {b.contractRent || b.rentNo ? ` · аренда ${b.contractRent || b.rentNo}` : ""}
             </dd>
           </div>
           <div className="line">
@@ -207,9 +205,7 @@ export function BookingCard({ b }: { b: Booking }) {
         {money.payments.length === 0 && <li className="muted small">Оплат пока нет</li>}
       </ul>
       {b.status !== "refused" && money.due > 0 && (
-        <p className="entry-due">
-          Остаток к оплате: <strong>{rub(money.due)}</strong>
-        </p>
+        <p className="entry-due">остаток {tr(money.due)}</p>
       )}
 
       {b.log.length > 0 && (
@@ -279,7 +275,7 @@ export function RecordCard({ b }: { b: Booking }) {
   return (
     <button type="button" className="paper record-card" onClick={() => open({ kind: "booking", id: b.id })}>
       <span className="rc-head">
-        <span className="rc-no">№ {b.depositNo}</span>
+        <span className="rc-no">№ {contractNo(b)}</span>
         <span className="rc-date">{fmtDate(b.createdAt)}</span>
         <Chip tone={overdue ? "bad" : STATUS_TONE[b.status]}>{overdue ? "Просрочен" : STATUS_LABEL[b.status]}</Chip>
       </span>
@@ -326,6 +322,16 @@ export function RecordCard({ b }: { b: Booking }) {
         </span>
       </span>
       {b.notes && <span className="rc-note">{b.notes}</span>}
+      {money.payments.length > 0 && (
+        <span className="rc-pays">
+          {money.payments.map((p) => (
+            <span key={p.id} className={p.confirmedAt ? "is-ok" : "is-wait"}>
+              {payText(p)} / {p.confirmedAt ? "подтверждён" : "ждёт подтверждения"}
+            </span>
+          ))}
+          {b.status !== "refused" && money.due > 0 && <span className="is-ok">остаток {tr(money.due)}</span>}
+        </span>
+      )}
     </button>
   );
 }

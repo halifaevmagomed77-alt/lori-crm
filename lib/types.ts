@@ -118,6 +118,8 @@ export type Booking = {
   log: { date: DateStr; text: string }[]; // переносы даты и прочие отметки
   createdBy: ID;
   notes?: string; // комментарий — консультант может дописывать после сохранения
+  contractDeposit?: string; // № договора на залог — вписывает консультант
+  contractRent?: string; // № договора аренды — вписывает консультант
 };
 
 /* ---------- Деньги ---------- */

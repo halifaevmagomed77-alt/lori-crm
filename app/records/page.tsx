@@ -1,17 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ConsultantBook } from "@/components/ConsultantBook";
 import { BookTabs, PageHead } from "@/components/Shell";
 import { RecordCard, STATUS_TONE } from "@/components/sheets";
 import { Chip, Empty, Icon, Segmented } from "@/components/ui";
 import { addDays, fmtShort, today } from "@/lib/dates";
-import { STATUS_LABEL, idx, isOverdue, rub, shortName } from "@/lib/derive";
+import { STATUS_LABEL, contractNo, idx, isOverdue, payText, rub, shortName } from "@/lib/derive";
 import { useStore } from "@/lib/store";
 import type { BookingStatus } from "@/lib/types";
 
 type Range = "30" | "90" | "365" | "all" | "custom";
 
 export default function RecordsPage() {
+  const { can } = useStore();
+  // у консультанта — своя страница, как в бумажной тетради
+  return can("editAll") ? <RecordsBook /> : <ConsultantBook />;
+}
+
+function RecordsBook() {
   const { db, can, open } = useStore();
   const I = idx(db);
   const [range, setRange] = useState<Range>("90");
@@ -91,6 +98,7 @@ export default function RecordsPage() {
         }
       />
 
+      {can("confirmPayments") && <ToConfirm />}
       <TodayRecords />
 
       <div className="search-input book-search">
@@ -270,6 +278,48 @@ function TodayRecords() {
       ) : (
         <p className="muted small">Сегодня ещё никого не записали.</p>
       )}
+    </section>
+  );
+}
+
+/** Владелец: записи и оплаты, которые консультанты отправили на подтверждение */
+function ToConfirm() {
+  const { db, open, confirmPayment, toast } = useStore();
+  const I = idx(db);
+  const list = db.payments.filter((p) => !p.confirmedAt).sort((a, b) => b.date.localeCompare(a.date));
+  if (!list.length) return null;
+  return (
+    <section className="confirm-block" aria-label="Ждут подтверждения">
+      <h2 className="today-title confirm-title">
+        Ждут подтверждения <span className="today-count">{list.length}</span>
+      </h2>
+      <ul className="today-list">
+        {list.map((p) => {
+          const k = I.booking.get(p.bookingId);
+          return (
+            <li key={p.id} className="confirm-row">
+              <button type="button" className="today-row" onClick={() => open({ kind: "booking", id: p.bookingId })}>
+                <span className="today-no">№ {k ? contractNo(k) : "—"}</span>
+                <span className="today-main">
+                  <strong>{k ? shortName(I.bride.get(k.brideId)?.name ?? "—") : "—"}</strong>
+                  <span className="confirm-text">{payText(p)}</span>
+                </span>
+                <span className="today-cons">{I.staff.get(p.recordedBy)?.name ?? "—"}</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-small btn-red"
+                onClick={() => {
+                  confirmPayment(p.id);
+                  toast("Подтверждено");
+                }}
+              >
+                Подтвердить
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
