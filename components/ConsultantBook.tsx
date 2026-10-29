@@ -147,7 +147,6 @@ function EntryForm({ onDone }: { onDone: () => void }) {
     event: !event ? "Укажите дату свадьбы" : pastEvent ? "Дата уже прошла" : "",
     sum: !Number(sum) ? "Укажите сумму" : "",
     deposit: !Number(deposit) ? "Укажите залог" : "",
-    fine: Number(fine) > 0 && !fineWhy.trim() ? "Напишите, за что штраф" : "",
     depositNo: takenNo ? "Такой номер уже есть" : "",
   };
   const ok = Object.values(errors).every((e) => !e);
@@ -179,6 +178,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         deposit: Number(deposit),
         extra: Number(extra) || 0,
         extraNote: extraNote.trim() || undefined,
+        fineNote: fineWhy.trim() || undefined,
         accessories: [],
         tasks: [],
         notes: notes.trim() || undefined,
@@ -187,7 +187,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
       },
       { method: transfer ? "transfer" : "cash", bank: transfer ? payWay : undefined },
     );
-    if (Number(fine) > 0) addPayment({ bookingId: k.id, kind: "fine", amount: Number(fine), reason: fineWhy.trim(), date: today(), method: "cash" });
+    if (Number(fine) > 0) addPayment({ bookingId: k.id, kind: "fine", amount: Number(fine), reason: fineWhy.trim() || undefined, date: today(), method: "cash" });
     toast("Запись отправлена на подтверждение владельцу");
     onDone();
   };
@@ -276,12 +276,19 @@ function EntryForm({ onDone }: { onDone: () => void }) {
           <input value={extraNote} onChange={(e) => setExtraNote(e.target.value)} placeholder="Что именно: серьги, фата, фотосессия…" aria-label="Доп, комментарий" />
         </span>
       </Line>
-      <Line label="Штраф" error={err("fine")} group>
-        <span className="ef-pair">
-          <Money value={fine} onChange={setFine} label="Штраф" />
-          <input value={fineWhy} onChange={(e) => setFineWhy(e.target.value)} placeholder="За что" aria-label="За что штраф" />
-        </span>
-      </Line>
+      <div className="ef-line ef-line-block">
+        <span className="ef-label">Штраф</span>
+        <div className="ef-field">
+          <textarea
+            aria-label="Штраф"
+            value={fineWhy}
+            onChange={(e) => setFineWhy(e.target.value)}
+            rows={2}
+            placeholder="За что штраф: не вернули вешалку, пятно на подоле…"
+          />
+          <Money value={fine} onChange={setFine} label="Сумма штрафа" placeholder="Сумма, если известна" />
+        </div>
+      </div>
       <Line label="№ договора аренды">
         <input value={rentNo} onChange={(e) => setRentNo(e.target.value)} inputMode="numeric" />
       </Line>

@@ -108,6 +108,7 @@ export type Booking = {
   deposit: number; // «Залог», не возвращается при отказе
   extra: number; // «Доп»
   extraNote?: string; // «Доп» словами: серьги, фата, фотосессия
+  fineNote?: string; // «Штраф» словами — консультант пишет причину сам, сумма может быть не указана
   accessories: Accessory[];
   veil?: string;
   tasks: string[]; // подгонка: «пришить пуговицы», «вставка» и т. п.

@@ -152,7 +152,10 @@ export function BookingCard({ b }: { b: Booking }) {
           </div>
           <div className="line">
             <dt>Штраф</dt>
-            <dd className="tabular">{fines.length ? fines.map((f) => `${rub(f.amount)} (${f.reason?.toLowerCase()})`).join("; ") : "—"}</dd>
+            <dd className="tabular">
+              {fines.length ? fines.map((f) => `${rub(f.amount)}${f.reason ? ` (${f.reason.toLowerCase()})` : ""}`).join("; ") : b.fineNote ? "" : "—"}
+              {b.fineNote && !fines.some((f) => f.reason === b.fineNote) && <span>{fines.length ? " · " : ""}{b.fineNote}</span>}
+            </dd>
           </div>
         </dl>
         <dl className="entry-lines entry-side">
@@ -323,6 +326,7 @@ export function RecordCard({ b }: { b: Booking }) {
         </span>
       </span>
       {b.extraNote && <span className="rc-note">Доп: {b.extraNote}</span>}
+      {b.fineNote && !money.payments.some((p) => p.kind === "fine") && <span className="rc-note rc-fine">Штраф: {b.fineNote}</span>}
       {b.notes && <span className="rc-note">{b.notes}</span>}
       {money.payments.length > 0 && (
         <span className="rc-pays">

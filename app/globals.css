@@ -1029,3 +1029,4 @@ button.mini-row:hover { background: var(--sand); }
   .ef-pair { grid-template-columns: 1fr; gap: 4px; }
 }
 .entry-form .dress-pick-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 104px)); }
+.rc-fine { color: var(--ink-red); }
