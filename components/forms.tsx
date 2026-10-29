@@ -699,6 +699,30 @@ function IssueForm({ bookingId, onClose }: { bookingId: string; onClose: () => v
 
 /* ---------- Приёмка ---------- */
 
+/** Причина штрафа — свободный текст; частые причины подставляются одним нажатием */
+function FineReason({ value, onChange, onPick, error }: { value: string; onChange: (v: string) => void; onPick?: (amount: number, reason: string) => void; error?: string }) {
+  return (
+    <Field label="За что штраф" error={error}>
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={2} placeholder="Напишите своими словами: что случилось с платьем или аксессуарами" />
+      <span className="reason-chips">
+        {FINE_REASONS.map(([r, sum]) => (
+          <button
+            key={r}
+            type="button"
+            className="chip-btn"
+            onClick={() => {
+              onChange(r);
+              onPick?.(sum, r);
+            }}
+          >
+            {r}
+          </button>
+        ))}
+      </span>
+    </Field>
+  );
+}
+
 const FINE_REASONS: [string, number][] = [
   ["Не принесли вешалку", 350],
   ["Не принесли чехол", 500],
@@ -714,8 +738,8 @@ function ReturnForm({ bookingId, onClose }: { bookingId: string; onClose: () => 
   const b = db.bookings.find((x) => x.id === bookingId)!;
   const late = isOverdue(b) ? diffDays(today(), b.returnDate) : 0;
   const [hasFine, setHasFine] = useState(late > 0);
-  const [reason, setReason] = useState(late > 0 ? "Возврат с опозданием" : FINE_REASONS[0][0]);
-  const [amount, setAmount] = useState(String(late > 0 ? Math.round(b.rentPrice * 0.1 * late) : FINE_REASONS[0][1]));
+  const [reason, setReason] = useState(late > 0 ? "Возврат с опозданием" : "");
+  const [amount, setAmount] = useState(late > 0 ? String(Math.round(b.rentPrice * 0.1 * late)) : "");
   const [method, setMethod] = useState<Payment["method"]>("cash");
   const [bank, setBank] = useState("ВТБ");
   const [cleaning, setCleaning] = useState(true);
@@ -748,26 +772,17 @@ function ReturnForm({ bookingId, onClose }: { bookingId: string; onClose: () => 
       </label>
       {hasFine && (
         <>
-          <div className="grid-2">
-            <Field label="За что">
-              <select
-                value={reason}
-                onChange={(e) => {
-                  setReason(e.target.value);
-                  const f = FINE_REASONS.find((x) => x[0] === e.target.value);
-                  if (f && f[1]) setAmount(String(f[1]));
-                  if (e.target.value === "Возврат с опозданием") setAmount(String(Math.round(b.rentPrice * 0.1 * Math.max(1, late))));
-                }}
-              >
-                {FINE_REASONS.map(([r]) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Сумма, ₽">
-              <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </Field>
-          </div>
+          <FineReason
+            value={reason}
+            onChange={setReason}
+            onPick={(sum, r) => {
+              if (sum) setAmount(String(sum));
+              if (r === "Возврат с опозданием") setAmount(String(Math.round(b.rentPrice * 0.1 * Math.max(1, late))));
+            }}
+          />
+          <Field label="Сумма, ₽">
+            <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </Field>
           <MethodPicker method={method} setMethod={setMethod} bank={bank} setBank={setBank} />
         </>
       )}
@@ -861,8 +876,9 @@ function PaymentForm({ bookingId, kind: initial, onClose }: { bookingId: string;
   const b = db.bookings.find((x) => x.id === bookingId)!;
   const money = paid(db, b);
   const [kind, setKind] = useState<Payment["kind"]>(initial ?? (b.status === "booked" ? "deposit" : "balance"));
-  const [amount, setAmount] = useState(String(kind === "fine" ? 350 : money.due || ""));
-  const [reason, setReason] = useState(FINE_REASONS[0][0]);
+  const [amount, setAmount] = useState(String(kind === "fine" ? "" : money.due || ""));
+  const [reason, setReason] = useState("");
+  const [tried, setTried] = useState(false);
   const [method, setMethod] = useState<Payment["method"]>("cash");
   const [bank, setBank] = useState("ВТБ");
   return (
@@ -874,8 +890,9 @@ function PaymentForm({ bookingId, kind: initial, onClose }: { bookingId: string;
           onClose={onClose}
           label="Записать"
           onSubmit={() => {
-            if (!Number(amount)) return;
-            addPayment({ bookingId, kind, amount: Number(amount), date: today(), method, bank: method === "transfer" ? bank : undefined, reason: kind === "fine" ? reason : undefined });
+            setTried(true);
+            if (!Number(amount) || (kind === "fine" && !reason.trim())) return;
+            addPayment({ bookingId, kind, amount: Number(amount), date: today(), method, bank: method === "transfer" ? bank : undefined, reason: kind === "fine" ? reason.trim() : undefined });
             toast(kind === "fine" ? "Штраф записан" : "Оплата записана, ждёт подтверждения владельца");
             onClose();
           }}
@@ -895,23 +912,14 @@ function PaymentForm({ bookingId, kind: initial, onClose }: { bookingId: string;
         />
       )}
       {kind === "fine" && (
-        <Field label="За что">
-          <select
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value);
-              const f = FINE_REASONS.find((x) => x[0] === e.target.value);
-              if (f && f[1]) setAmount(String(f[1]));
-            }}
-          >
-            {FINE_REASONS.map(([r]) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
-        </Field>
+        <FineReason value={reason} onChange={setReason} onPick={(sum) => sum && setAmount(String(sum))} error={tried && !reason.trim() ? "Напишите, за что штраф" : undefined} />
       )}
-      <Field label="Сумма, ₽" hint={kind !== "fine" && money.due ? `Остаток к оплате ${rub(money.due)}` : undefined}>
-        <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+      <Field
+        label="Сумма, ₽"
+        hint={kind !== "fine" && money.due ? `Остаток к оплате ${rub(money.due)}` : undefined}
+        error={tried && !Number(amount) ? "Укажите сумму" : undefined}
+      >
+        <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus={kind !== "fine"} />
       </Field>
       <MethodPicker method={method} setMethod={setMethod} bank={bank} setBank={setBank} />
     </Modal>

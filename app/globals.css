@@ -1094,3 +1094,10 @@ html, body { overflow-x: clip; }
   .timesheet .attendance th:first-child { width: 34%; }
   .timesheet .time-cell { width: 100%; min-width: 64px; padding: 2px 0; }
 }
+
+/* Частые причины штрафа — подсказки под полем */
+.reason-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn { min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; font-size: 14px; color: var(--ink-2); }
+.chip-btn:hover { border-color: var(--ink-2); color: var(--ink); }
+/* Форма на телефоне занимает весь экран: кнопки прижаты к низу, а не висят посередине */
+@media (max-width: 640px) { .modal-body { flex: 1; } }
