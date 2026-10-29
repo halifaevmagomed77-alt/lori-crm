@@ -893,3 +893,31 @@ button.mini-row:hover { background: var(--sand); }
 }
 .kiosk-link { align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
 .kiosk-link span { flex: 1 1 260px; }
+
+/* ----- Режим администратора на планшете ----- */
+.kiosk-foot-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.kiosk-admin-wrap { align-items: start; overflow-y: auto; }
+.kiosk-admin { width: min(820px, 100%); max-height: none; margin: 24px auto; }
+.kadm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.kadm-tabs { display: flex; gap: 6px; padding: 4px; background: #efebe7; border-radius: 12px; }
+.kadm-tabs button { flex: 1; min-height: 48px; border: 0; border-radius: 9px; background: transparent; font-size: 16px; font-weight: 600; color: var(--ink-2); }
+.kadm-tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(29,27,26,.12); }
+.kadm-body { display: grid; gap: 14px; }
+.kadm-title { font-family: var(--serif); font-size: 26px; line-height: 1.15; }
+.kadm-list { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.kadm-row { display: grid; grid-template-columns: minmax(140px, 1fr) 1.4fr auto; gap: 6px 14px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+.kadm-row:first-child { border-top: 0; }
+.kadm-name { font-weight: 600; font-size: 16px; }
+.kadm-state { font-size: 14px; color: var(--stone); }
+.kadm-row .btn { min-height: 46px; }
+.kadm-note { text-align: right; }
+.kadm-quick { display: flex; gap: 8px; flex-wrap: wrap; }
+.kadm-quick .btn { min-height: 46px; }
+.kiosk-admin .field input, .kiosk-admin .field select { min-height: 52px; font-size: 18px; }
+.kiosk-admin .kiosk-form input { letter-spacing: normal; font-size: 18px !important; min-height: 52px !important; }
+@media (max-width: 640px) {
+  .kadm-row { grid-template-columns: 1fr auto; }
+  .kadm-state { grid-column: 1; }
+  .kadm-row .btn { grid-column: 2; grid-row: 1 / span 2; }
+  .kiosk-admin { margin: 0 auto; }
+}

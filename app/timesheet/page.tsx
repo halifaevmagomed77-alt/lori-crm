@@ -68,7 +68,9 @@ export default function TimesheetPage() {
                   <th scope="row">{st.name}</th>
                   {a?.dayOff ? (
                     <td colSpan={3} className="off">
-                      выходной{" "}
+                      выходной
+                      {a.note ? ` · ${a.note.toLowerCase()}` : ""}
+                      {a.setBy ? ` · поставила ${db.staff.find((x) => x.id === a.setBy)?.name ?? "администратор"}` : ""}{" "}
                       <button type="button" className="link-btn small" onClick={() => set({ dayOff: false })}>
                         отменить
                       </button>

@@ -18,7 +18,16 @@ export const MAX_EMPLOYEES = 30;
 export type Staff = { id: ID; name: string; role: Role; active: boolean; phone?: string; login: string; password: string };
 
 /** Табель: кто во сколько пришёл и ушёл (видят владелец и администратор) */
-export type Attendance = { id: ID; staffId: ID; date: DateStr; in?: string; out?: string; dayOff?: boolean };
+export type Attendance = {
+  id: ID;
+  staffId: ID;
+  date: DateStr;
+  in?: string;
+  out?: string;
+  dayOff?: boolean;
+  note?: string; // причина выходного: «болеет», «по семейным»
+  setBy?: ID; // выходной поставил администратор за сотрудника
+};
 
 /* ---------- Платья ---------- */
 

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { createInitial } from "./seed";
 import { createDemo } from "./demo";
 import { clearPhotos, deletePhoto } from "./photos";
-import { today } from "./dates";
+import { addDays, today } from "./dates";
 import type { Attendance, Booking, Bride, DB, DressItem, Payment, Role, Staff, Supplier, Visit } from "./types";
 
 const KEY = "lori-crm:v3";
@@ -179,6 +179,25 @@ function useStoreValue() {
         } catch {}
         return true;
       },
+      /** Пароль администратора или владельца — для режима администратора на планшете */
+      checkManager: (password: string): Staff | null =>
+        db.staff.find((s) => s.active && s.role !== "employee" && s.password === password) ?? null,
+      /** Администратор ставит выходной за сотрудника — на один день или на несколько подряд */
+      setDaysOff: (staffId: string, from: string, to: string, note: string, by: string) =>
+        update((d) => {
+          let attendance = d.attendance;
+          for (let day = from; day <= to; day = addDays(day, 1)) {
+            const ex = attendance.find((x) => x.staffId === staffId && x.date === day);
+            const patch = { dayOff: true, in: undefined, out: undefined, note: note || undefined, setBy: by };
+            attendance = ex ? attendance.map((x) => (x === ex ? { ...ex, ...patch } : x)) : [...attendance, { id: uid("a"), staffId, date: day, ...patch }];
+          }
+          return { ...d, attendance };
+        }),
+      cancelDayOff: (staffId: string, date: string) =>
+        update((d) => ({
+          ...d,
+          attendance: d.attendance.filter((x) => !(x.staffId === staffId && x.date === date && x.dayOff && !x.in)),
+        })),
       checkPassword: (staffId: string, password: string) => db.staff.some((s) => s.id === staffId && s.active && s.password === password),
       /** Отметка сотрудника на планшете текущим временем */
       mark: (staffId: string, kind: "in" | "out" | "off") =>
@@ -187,10 +206,10 @@ function useStoreValue() {
           const ex = d.attendance.find((x) => x.staffId === staffId && x.date === date);
           const patch =
             kind === "in"
-              ? { in: nowTime(), out: undefined, dayOff: false }
+              ? { in: nowTime(), out: undefined, dayOff: false, note: undefined, setBy: undefined }
               : kind === "out"
                 ? { out: nowTime() }
-                : { dayOff: true, in: undefined, out: undefined };
+                : { dayOff: true, in: undefined, out: undefined, note: undefined, setBy: undefined };
           return {
             ...d,
             attendance: ex

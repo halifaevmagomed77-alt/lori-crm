@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { TabelAdmin } from "@/components/TabelAdmin";
 import { Icon } from "@/components/ui";
 import { fmtDay, today, weekday } from "@/lib/dates";
 import { fmtMinutes, workMinutes } from "@/lib/derive";
@@ -24,7 +25,7 @@ function useClock() {
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
 function statusOf(a?: Attendance): { tone: "none" | "in" | "out" | "off"; text: string } {
-  if (a?.dayOff) return { tone: "off", text: "выходной" };
+  if (a?.dayOff) return { tone: "off", text: a.note ? `выходной · ${a.note.toLowerCase()}` : "выходной" };
   if (a?.in && a.out) {
     const h = fmtMinutes(workMinutes(a));
     return { tone: "out", text: `${a.in} – ${a.out}${h ? ` · ${h}` : ""}` };
@@ -89,6 +90,9 @@ function Board() {
   const now = useClock();
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [closing, setClosing] = useState(false);
+  const [askAdmin, setAskAdmin] = useState(false);
+  const [manager, setManager] = useState<Staff | null>(null);
+  const closeAdmin = useCallback(() => setManager(null), []);
   const team = db.staff.filter((s) => s.active && s.role !== "owner");
   const day = db.attendance.filter((a) => a.date === today());
   const opener = db.staff.find((s) => s.id === kiosk?.by);
@@ -154,9 +158,14 @@ function Board() {
         <span className="muted small">
           Табель открыт: {opener ? `${opener.name}${opener.name === ROLE_LABEL[opener.role] ? "" : ` (${ROLE_LABEL[opener.role].toLowerCase()})`}` : "—"}
         </span>
-        <button type="button" className="link-btn small" onClick={() => setClosing(true)}>
-          Закрыть табель
-        </button>
+        <span className="kiosk-foot-actions">
+          <button type="button" className="btn btn-ghost" onClick={() => (setStep({ kind: "list" }), setAskAdmin(true))}>
+            <Icon name="user" size={18} /> Режим администратора
+          </button>
+          <button type="button" className="link-btn small" onClick={() => setClosing(true)}>
+            Закрыть табель
+          </button>
+        </span>
       </footer>
 
       {step.kind === "pin" && <PinPanel staff={step.staff} onCancel={() => setStep({ kind: "list" })} onOk={() => setStep({ kind: "act", staff: step.staff })} />}
@@ -175,6 +184,16 @@ function Board() {
         </Panel>
       )}
       {closing && <ClosePanel onClose={() => setClosing(false)} />}
+      {askAdmin && (
+        <AdminLogin
+          onClose={() => setAskAdmin(false)}
+          onOk={(m) => {
+            setAskAdmin(false);
+            setManager(m);
+          }}
+        />
+      )}
+      {manager && <TabelAdmin manager={manager} onClose={closeAdmin} />}
     </>
   );
 }
@@ -299,6 +318,49 @@ function ClosePanel({ onClose }: { onClose: () => void }) {
           </button>
           <button type="submit" className="btn btn-red kiosk-big" disabled={!pw}>
             Закрыть
+          </button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+/** Вход в режим администратора — пароль администратора или владельца */
+function AdminLogin({ onClose, onOk }: { onClose: () => void; onOk: (m: Staff) => void }) {
+  const { checkManager } = useStore();
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState(false);
+  return (
+    <Panel onClose={onClose} label="Режим администратора">
+      <form
+        className="kiosk-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const m = checkManager(pw);
+          if (m) onOk(m);
+          else {
+            setErr(true);
+            setPw("");
+          }
+        }}
+      >
+        <p className="kiosk-panel-name">Режим администратора</p>
+        <p className="muted small">Выходные за сотрудников, добавление и удаление сотрудников.</p>
+        <label className="field">
+          <span className="field-label">Пароль администратора</span>
+          <input type="password" value={pw} onChange={(e) => (setPw(e.target.value), setErr(false))} autoFocus />
+        </label>
+        {err && (
+          <p className="field-error" role="alert">
+            Неверный пароль
+          </p>
+        )}
+        <div className="kiosk-actions">
+          <button type="button" className="btn btn-ghost kiosk-big" onClick={onClose}>
+            Отмена
+          </button>
+          <button type="submit" className="btn kiosk-big" disabled={!pw}>
+            Войти
           </button>
         </div>
       </form>
