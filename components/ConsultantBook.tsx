@@ -204,6 +204,12 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
 
+      {/* 1. Текущая дата — как заголовок страницы журнала */}
+      <div className="ef-line">
+        <span className="ef-label">Дата</span>
+        <span className="ef-field ef-static tabular">{ddmmyyyy(today())}</span>
+      </div>
+
       {picked && hist ? (
         <div className="returning-box" role="status">
           <p className="returning-tag">
@@ -268,14 +274,16 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         </p>
       )}
 
-      <Line label="Дата свадьбы" error={err("event")}>
-        <input type="date" value={event} min={today()} onChange={(e) => setEvent(e.target.value)} />
-      </Line>
-      {event && <p className="ef-hint">Выдача {ddmmyyyy(issue)}, возврат {ddmmyyyy(ret)} — администратор может поменять.</p>}
-
+      {/* 4. Платье. Дата свадьбы — внутри этой строки: по ней проверяется, свободно ли платье */}
       <div className="ef-line ef-line-block">
         <span className="ef-label">Платье</span>
         <div className="ef-field">
+          <label className={`ef-sub${err("event") ? " has-error" : ""}`}>
+            <span>на свадьбу</span>
+            <input type="date" value={event} min={today()} onChange={(e) => setEvent(e.target.value)} aria-label="Дата свадьбы" />
+          </label>
+          {err("event") && <span className="field-error">{err("event")}</span>}
+          {event && <span className="ef-hint ef-hint-in">Выдача {ddmmyyyy(issue)}, возврат {ddmmyyyy(ret)} — администратор может поменять.</span>}
           <ItemPicker selected={item ? [item] : []} onToggle={pickItem} from={issue || undefined} to={ret || undefined} />
           {err("item") && <span className="field-error">{err("item")}</span>}
         </div>

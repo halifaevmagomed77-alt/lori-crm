@@ -729,7 +729,7 @@ button.mini-row:hover { background: var(--sand); }
 .rc-date { font-size: 13px; color: var(--stone); margin-right: auto; }
 .rc-name { font-family: var(--serif); font-size: 21px; line-height: 1.15; color: var(--ink); }
 .rc-lines { display: grid; }
-.rc-line { display: grid; grid-template-columns: 96px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid rgba(70, 110, 170, .14); font-size: 14px; }
+.rc-line { display: grid; grid-template-columns: 112px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid rgba(70, 110, 170, .14); font-size: 14px; }
 .rc-line i, .rc-money i { font-family: var(--serif); color: var(--ink-blue); opacity: .85; }
 .rc-line b { font-weight: 500; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-money { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-top: 4px; }
@@ -1117,3 +1117,40 @@ html, body { overflow-x: clip; }
 .returning-meta { font-size: 14px; color: var(--ink-2); }
 .returning-box .link-btn { justify-self: start; margin-top: 4px; }
 .rc-returning { justify-self: start; padding: 2px 10px; border-radius: 999px; background: #eef2fa; color: var(--ink-blue); font-size: 12px; font-weight: 700; }
+
+/* Форма консультанта: дата строкой и дата свадьбы внутри «Платье» */
+.ef-static { font-size: 17px; color: var(--ink); padding: 6px 0; }
+.ef-sub { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
+.ef-sub > span { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-blue); }
+.ef-sub.has-error input { border-bottom-color: var(--bad); }
+.ef-hint.ef-hint-in { padding: 0 0 4px; }
+
+/* Карточка записи в порядке журнала: № договоров и комментарий строками */
+.rc-cons { font-size: 13px; color: var(--ink-blue); font-family: var(--serif); font-style: italic; }
+.rc-line b.rc-wrap { white-space: normal; }
+
+/* =========================================================
+   v3 — без «тетради»: белый фон, ровные строки
+   ========================================================= */
+.paper {
+  background-image: none;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(29, 27, 26, .04);
+}
+/* подписи полей — обычный шрифт, серые, одной высоты */
+.ef-label, .line dt, .rc-line i, .rc-money i, .ef-sub > span, .rc-cons, .cbook-name {
+  font-family: inherit; font-style: normal; opacity: 1;
+}
+.ef-label, .line dt, .rc-line i, .rc-money i, .ef-sub > span { color: var(--stone); font-size: 14px; font-weight: 500; }
+.rc-cons { color: var(--stone); font-size: 13px; }
+.cbook-name { font-size: 18px; font-weight: 600; color: var(--ink); }
+/* строки — ровные, разделитель нейтральный */
+.ef-line, .rc-line, .entry-lines .line { border-bottom: 1px solid var(--line); }
+.ef-line { min-height: 52px; }
+.rc-line { padding: 6px 0; }
+.rc-money { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rc-note { font-style: normal; }
+.entry-note { font-style: normal; }
+/* красные строки подтверждения — тот же цвет, обычный шрифт */
+.rc-pays > span, .pay-lines li, .entry-due { font-family: inherit; font-style: normal; font-size: 14px; }
+.line { grid-template-columns: 108px 1fr; padding: 10px 0; align-items: center; }

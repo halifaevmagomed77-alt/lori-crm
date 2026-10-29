@@ -1,7 +1,7 @@
 "use client";
 
 import { fmtDate, fmtShort, relDay, today } from "@/lib/dates";
-import { ITEM_STATE_LABEL, STATUS_LABEL, contractNo, fmtMoney, idx, isOverdue, itemState, paid, payText, purchaseRub, rub, shortName, tr } from "@/lib/derive";
+import { ITEM_STATE_LABEL, STATUS_LABEL, contractNo, fmtMoney, idx, isOverdue, itemState, paid, payText, purchaseRub, rub, shortName, staffShort, tr } from "@/lib/derive";
 import { useStore } from "@/lib/store";
 import { type Booking, type Bride, type DressItem, type Payment } from "@/lib/types";
 import { DressPhoto } from "./forms";
@@ -92,6 +92,7 @@ export function BookingCard({ b }: { b: Booking }) {
         <Chip tone={overdue ? "bad" : STATUS_TONE[b.status]}>{overdue ? "Просрочен возврат" : STATUS_LABEL[b.status]}</Chip>
       </header>
 
+      {/* Порядок как в журнале салона: имя → тел → платье → сумма, залог, доп, штраф → № договоров → комментарий → красные строки */}
       <dl className="entry-lines">
         <div className="line">
           <dt>Имя</dt>
@@ -103,6 +104,17 @@ export function BookingCard({ b }: { b: Booking }) {
             ) : (
               "—"
             )}
+          </dd>
+        </div>
+        <div className="line">
+          <dt>Тел</dt>
+          <dd className="tabular">
+            {bride?.phones.map((ph, i) => (
+              <a key={ph} href={`tel:${ph.replace(/\D/g, "")}`} className="ink-link">
+                {ph}
+                {i < bride.phones.length - 1 ? ", " : ""}
+              </a>
+            ))}
           </dd>
         </div>
         <div className="line">
@@ -120,71 +132,56 @@ export function BookingCard({ b }: { b: Booking }) {
           </dd>
         </div>
         <div className="line">
-          <dt>Тел</dt>
+          <dt>Сумма</dt>
+          <dd className="tabular">{rub(b.rentPrice)}</dd>
+        </div>
+        <div className="line">
+          <dt>Залог</dt>
+          <dd className="tabular">{rub(b.deposit)}</dd>
+        </div>
+        <div className="line">
+          <dt>Доп</dt>
           <dd className="tabular">
-            {bride?.phones.map((ph, i) => (
-              <a key={ph} href={`tel:${ph.replace(/\D/g, "")}`} className="ink-link">
-                {ph}
-                {i < bride.phones.length - 1 ? ", " : ""}
-              </a>
-            ))}
+            {b.extra ? rub(b.extra) : b.extraNote ? "" : "—"}
+            {b.extraNote && <span className={b.extra ? "muted" : undefined}>{b.extra ? " · " : ""}{b.extraNote}</span>}
+            {b.accessories.length > 0 && <span className="muted"> · {b.accessories.map((a) => a.name.toLowerCase()).join(", ")}</span>}
+          </dd>
+        </div>
+        <div className="line">
+          <dt>Штраф</dt>
+          <dd className="tabular">
+            {fines.length ? fines.map((f) => `${rub(f.amount)}${f.reason ? ` (${f.reason.toLowerCase()})` : ""}`).join("; ") : b.fineNote ? "" : "—"}
+            {b.fineNote && !fines.some((f) => f.reason === b.fineNote) && <span>{fines.length ? " · " : ""}{b.fineNote}</span>}
+          </dd>
+        </div>
+        <div className="line">
+          <dt>№ дог. аренды</dt>
+          <dd className="tabular">{b.contractRent || b.rentNo || "—"}</dd>
+        </div>
+        <div className="line">
+          <dt>№ дог. залога</dt>
+          <dd className="tabular">{contractNo(b)}</dd>
+        </div>
+        <div className="line">
+          <dt>Консультант</dt>
+          <dd>{cons?.name ?? "—"}</dd>
+        </div>
+        <div className="line">
+          <dt>Свадьба</dt>
+          <dd>
+            {fmtDate(b.eventDate)}
+            {b.eventDate >= today() && <span className="muted"> · {relDay(b.eventDate)}</span>}
+          </dd>
+        </div>
+        <div className="line">
+          <dt>Выдача</dt>
+          <dd>
+            {fmtShort(b.issueDate)} → возврат {fmtShort(b.returnDate)}
           </dd>
         </div>
       </dl>
 
-      <div className="entry-grid">
-        <dl className="entry-lines">
-          <div className="line">
-            <dt>Залог</dt>
-            <dd className="tabular">{rub(b.deposit)}</dd>
-          </div>
-          <div className="line">
-            <dt>Аренда</dt>
-            <dd className="tabular">{rub(b.rentPrice)}</dd>
-          </div>
-          <div className="line">
-            <dt>Доп</dt>
-            <dd className="tabular">
-              {b.extra ? rub(b.extra) : b.extraNote ? "" : "—"}
-              {b.extraNote && <span className={b.extra ? "muted" : undefined}>{b.extra ? " · " : ""}{b.extraNote}</span>}
-              {b.accessories.length > 0 && <span className="muted"> · {b.accessories.map((a) => a.name.toLowerCase()).join(", ")}</span>}
-            </dd>
-          </div>
-          <div className="line">
-            <dt>Штраф</dt>
-            <dd className="tabular">
-              {fines.length ? fines.map((f) => `${rub(f.amount)}${f.reason ? ` (${f.reason.toLowerCase()})` : ""}`).join("; ") : b.fineNote ? "" : "—"}
-              {b.fineNote && !fines.some((f) => f.reason === b.fineNote) && <span>{fines.length ? " · " : ""}{b.fineNote}</span>}
-            </dd>
-          </div>
-        </dl>
-        <dl className="entry-lines entry-side">
-          <div className="line">
-            <dt>№</dt>
-            <dd className="tabular">
-              залог {contractNo(b)}
-              {b.contractRent || b.rentNo ? ` · аренда ${b.contractRent || b.rentNo}` : ""}
-            </dd>
-          </div>
-          <div className="line">
-            <dt>Консультант</dt>
-            <dd>{cons?.name ?? "—"}</dd>
-          </div>
-          <div className="line">
-            <dt>Свадьба</dt>
-            <dd>
-              {fmtDate(b.eventDate)}
-              {b.eventDate >= today() && <span className="muted"> · {relDay(b.eventDate)}</span>}
-            </dd>
-          </div>
-          <div className="line">
-            <dt>Выдача</dt>
-            <dd>
-              {fmtShort(b.issueDate)} → возврат {fmtShort(b.returnDate)}
-            </dd>
-          </div>
-        </dl>
-      </div>
+      {b.notes && <p className="entry-note">Комментарий: {b.notes}</p>}
 
       {b.tasks.length > 0 && (
         <ul className="entry-tasks">
@@ -193,8 +190,6 @@ export function BookingCard({ b }: { b: Booking }) {
           ))}
         </ul>
       )}
-
-      {b.notes && <p className="entry-note">Комментарий: {b.notes}</p>}
 
       {b.status === "refused" && (
         <p className="entry-refuse">
@@ -283,8 +278,8 @@ export function RecordCard({ b }: { b: Booking }) {
   const servedBy = b.createdBy !== b.consultantId ? I.staff.get(b.createdBy) : undefined;
   return (
     <button type="button" className="paper record-card" onClick={() => open({ kind: "booking", id: b.id })}>
+      {/* Порядок как в журнале: дата → имя → тел → платье → сумма, залог, доп, штраф → № договоров → комментарий → красные строки */}
       <span className="rc-head">
-        <span className="rc-no">№ {contractNo(b)}</span>
         <span className="rc-date">{fmtDate(b.createdAt)}</span>
         <Chip tone={overdue ? "bad" : STATUS_TONE[b.status]}>{overdue ? "Просрочен" : STATUS_LABEL[b.status]}</Chip>
       </span>
@@ -297,35 +292,25 @@ export function RecordCard({ b }: { b: Booking }) {
       )}
       <span className="rc-lines">
         <span className="rc-line">
-          <i>Платье</i>
-          <b>
-            {item?.model ?? "—"}
-            {item && <span className="muted"> · {item.size}</span>}
-          </b>
-        </span>
-        <span className="rc-line">
           <i>Тел</i>
           <b className="tabular">{bride?.phones[0] ?? "—"}</b>
         </span>
         <span className="rc-line">
-          <i>Свадьба</i>
+          <i>Платье</i>
           <b>
-            {fmtShort(b.eventDate)} · выдача {fmtShort(b.issueDate)}
+            {item?.model ?? "—"}
+            {item && <span className="muted"> · {item.size} · свадьба {fmtShort(b.eventDate)}</span>}
           </b>
-        </span>
-        <span className="rc-line">
-          <i>Консультант</i>
-          <b>{I.staff.get(b.consultantId)?.name ?? "—"}</b>
         </span>
       </span>
       <span className="rc-money">
         <span>
-          <i>Залог</i>
-          <b>{rub(b.deposit)}</b>
+          <i>Сумма</i>
+          <b>{rub(b.rentPrice)}</b>
         </span>
         <span>
-          <i>Аренда</i>
-          <b>{rub(b.rentPrice)}</b>
+          <i>Залог</i>
+          <b>{rub(b.deposit)}</b>
         </span>
         <span>
           <i>Доп</i>
@@ -338,6 +323,17 @@ export function RecordCard({ b }: { b: Booking }) {
       </span>
       {b.extraNote && <span className="rc-note">Доп: {b.extraNote}</span>}
       {b.fineNote && !money.payments.some((p) => p.kind === "fine") && <span className="rc-note rc-fine">Штраф: {b.fineNote}</span>}
+      <span className="rc-lines">
+        <span className="rc-line">
+          <i>№ дог. аренды</i>
+          <b className="tabular">{b.contractRent || b.rentNo || "—"}</b>
+        </span>
+        <span className="rc-line">
+          <i>№ дог. залога</i>
+          <b className="tabular">{contractNo(b)}</b>
+        </span>
+      </span>
+      <span className="rc-cons">кон. {staffShort(I.staff.get(b.consultantId)?.name ?? "—")}</span>
       {b.notes && <span className="rc-note">{b.notes}</span>}
       {money.payments.length > 0 && (
         <span className="rc-pays">
