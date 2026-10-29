@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { createInitial } from "./seed";
+import { TEST_ACCOUNTS, createInitial } from "./seed";
 import { createDemo } from "./demo";
 import { clearPhotos, deletePhoto } from "./photos";
 import { addDays, today } from "./dates";
@@ -370,6 +370,26 @@ function useStoreValue() {
         }
       },
       /** Полная очистка: удаляются все невесты, записи, платья и поставщики; учётные записи остаются */
+      /**
+       * Табель к началу: все отметки и выходные удаляются, сотрудники — снова тестовые
+       * (Администратор, Консультант 1–3 с исходными паролями). Невесты и записи не трогаем;
+       * добавленные сотрудники, у которых уже есть записи, остаются в истории с закрытым доступом.
+       */
+      resetTabel: () =>
+        update((d) => {
+          const used = (id: string) =>
+            d.visits.some((v) => v.consultantId === id) || d.bookings.some((b) => b.consultantId === id || b.createdBy === id) || d.payments.some((p) => p.recordedBy === id);
+          const defaults = new Set(TEST_ACCOUNTS.map((s) => s.id));
+          const owner = d.staff.find((s) => s.id === "u-owner");
+          return {
+            ...d,
+            staff: [
+              ...TEST_ACCOUNTS.map((s) => (s.id === "u-owner" && owner ? owner : { ...s })),
+              ...d.staff.filter((s) => !defaults.has(s.id) && used(s.id)).map((s) => ({ ...s, active: false })),
+            ],
+            attendance: [],
+          };
+        }),
       clearAll: () => {
         setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff }));
         clearPhotos();

@@ -926,3 +926,4 @@ button.mini-row:hover { background: var(--sand); }
 .modal-body .segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; overflow: visible; max-width: none; }
 .modal-body .segmented-item { white-space: normal; line-height: 1.2; min-height: 44px; padding: 6px 8px; }
 .dress-pick-grid > li.muted { grid-column: 1 / -1; }
+.kadm-reset { justify-self: start; color: var(--stone); }

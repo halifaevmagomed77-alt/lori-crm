@@ -261,6 +261,42 @@ function StaffList() {
       <p className="muted small">
         Консультантов: {employees} из {MAX_EMPLOYEES}. Новый сотрудник сразу появляется в табеле и может войти в CRM со своим логином и паролем.
       </p>
+      <ResetTabel onDone={() => setMsg("Табель сброшен: отметок нет, сотрудники — тестовые")} />
+    </div>
+  );
+}
+
+/** Демо: вернуть табель к начальному состоянию */
+function ResetTabel({ onDone }: { onDone: () => void }) {
+  const { resetTabel } = useStore();
+  const [ask, setAsk] = useState(false);
+  if (!ask)
+    return (
+      <button type="button" className="link-btn small kadm-reset" onClick={() => setAsk(true)}>
+        Сбросить табель к началу
+      </button>
+    );
+  return (
+    <div className="danger-confirm">
+      <p>
+        Удалятся все отметки «пришла / ушла» и выходные. Сотрудники вернутся к тестовым: Администратор (admin / lori-admin), Консультант 1–3 (cons1 / lori-1, cons2 / lori-2, cons3 / lori-3). Невесты и записи в CRM не изменятся.
+      </p>
+      <div className="danger-actions">
+        <button type="button" className="btn btn-ghost" onClick={() => setAsk(false)}>
+          Отмена
+        </button>
+        <button
+          type="button"
+          className="btn btn-red"
+          onClick={() => {
+            resetTabel();
+            setAsk(false);
+            onDone();
+          }}
+        >
+          Сбросить
+        </button>
+      </div>
     </div>
   );
 }
