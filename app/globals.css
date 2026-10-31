@@ -1182,3 +1182,4 @@ html, body { overflow-x: clip; }
 .kiosk-effect { padding: 10px 12px; border-radius: 10px; background: var(--sand, #f3eee7); font-size: 15px; color: var(--ink); }
 @media (max-width: 420px) { .kiosk-special { grid-template-columns: 1fr; } }
 .kiosk-sp { min-height: 56px; place-content: center; text-align: center; }
+.kiosk-sp:disabled { background: #f2efeb; color: #b5aea6; border-color: transparent; cursor: default; }

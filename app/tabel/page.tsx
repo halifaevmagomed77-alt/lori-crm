@@ -35,6 +35,35 @@ function statusOf(a?: Attendance): { tone: "none" | "in" | "out" | "off"; text: 
   return { tone: "none", text: "не отметилась" };
 }
 
+/** Рабочий день 10:00–19:00. «Пришла» — не раньше 9:30, «Ушла» — не позже 19:00 */
+const EARLIEST_IN = "09:30";
+const WORK_START = "10:00";
+const WORK_END = "19:00";
+
+/**
+ * Какие кнопки сейчас доступны.
+ * Раньше 9:30 — только «Надевание» / «Фотосессия» (это и есть приход).
+ * После 19:00 — вместо «Ушла» только «Переработка».
+ * «Неполный день» и «Переработка» взаимоисключающие в один день.
+ */
+function allowed(a: Attendance | undefined, now: string) {
+  const has = (k: MarkKind) => !!a?.marks?.some((m) => m.kind === k);
+  const off = !!a?.dayOff;
+  const working = !!a?.in && !a.out && !off;
+  const notIn = !a?.in && !off;
+  return {
+    in: notIn && now >= EARLIEST_IN && now < WORK_END,
+    // после 19:00 уход — это переработка; но если день уже неполный, переработки быть не может — просто «Ушла»
+    out: working && (now < WORK_END || has("partial")),
+    off: !a?.in && !off,
+    dressing: notIn && now < WORK_START,
+    photo: notIn && now < WORK_START,
+    overtime: working && now >= WORK_END && !has("partial"),
+    // пришла позже начала дня или уходит раньше конца
+    partial: !has("overtime") && !has("partial") && ((notIn && now > WORK_START && now < WORK_END) || (working && now < WORK_END)),
+  };
+}
+
 /** Особые отметки: что нажать и что произойдёт со временем */
 const SPECIAL: { kind: MarkKind; hint: string; placeholder: string }[] = [
   { kind: "dressing", hint: "Пришла раньше на надевание невесты", placeholder: "Чья невеста, во сколько надевание" },
@@ -207,9 +236,21 @@ function ActPanel({
   onSpecial: (k: MarkKind) => void;
 }) {
   const st = statusOf(a);
-  const canIn = !a?.in;
-  const canOut = !!a?.in && !a.out && !a.dayOff;
-  const canOff = !a?.in && !a?.dayOff;
+  const now = hhmm(new Date());
+  const ok = allowed(a, now);
+  const canIn = ok.in;
+  const canOut = ok.out;
+  const canOff = ok.off;
+  const notIn = !a?.in && !a?.dayOff;
+  const working = !!a?.in && !a.out && !a.dayOff;
+  const hint =
+    notIn && now < EARLIEST_IN
+      ? "Рабочий день с 10:00. Отметиться «Пришла» можно с 9:30 — если вы пришли раньше, нажмите «Надевание» или «Фотосессия»."
+      : working && now >= WORK_END && !a?.marks?.some((m) => m.kind === "partial")
+        ? "Рабочий день закончился в 19:00. Если вы задержались — отметьте «Переработка»."
+        : notIn && now >= WORK_END
+          ? "Рабочий день уже закончился."
+          : "";
   return (
     <Panel onClose={onCancel} label={staff.name}>
       <p className="kiosk-panel-name">{staff.name}</p>
@@ -232,10 +273,12 @@ function ActPanel({
         </button>
       </div>
 
+      {hint && <p className="kiosk-effect">{hint}</p>}
+
       <p className="kiosk-special-title">Особая отметка</p>
       <div className="kiosk-special">
         {SPECIAL.map((x) => (
-          <button key={x.kind} type="button" className={`kiosk-sp sp-${x.kind}`} onClick={() => onSpecial(x.kind)}>
+          <button key={x.kind} type="button" className={`kiosk-sp sp-${x.kind}`} disabled={!ok[x.kind]} onClick={() => onSpecial(x.kind)}>
             <strong>{MARK_LABEL[x.kind]}</strong>
           </button>
         ))}
