@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui";
 import { fmtDay, today, weekday } from "@/lib/dates";
 import { fmtMinutes, workMinutes } from "@/lib/derive";
 import { useStore } from "@/lib/store";
-import { ROLE_LABEL, type Attendance, type Staff } from "@/lib/types";
+import { MARK_LABEL, type Attendance, type MarkKind, type Staff } from "@/lib/types";
 
 /** Сколько секунд держим экран сотрудника без действий, прежде чем вернуться к списку */
 const IDLE_SECONDS = 30;
@@ -26,76 +26,49 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.g
 
 function statusOf(a?: Attendance): { tone: "none" | "in" | "out" | "off"; text: string } {
   if (a?.dayOff) return { tone: "off", text: a.note ? `выходной · ${a.note.toLowerCase()}` : "выходной" };
+  const marks = a?.marks?.length ? ` · ${[...new Set(a.marks.map((m) => MARK_LABEL[m.kind].toLowerCase()))].join(", ")}` : "";
   if (a?.in && a.out) {
     const h = fmtMinutes(workMinutes(a));
-    return { tone: "out", text: `${a.in} – ${a.out}${h ? ` · ${h}` : ""}` };
+    return { tone: "out", text: `${a.in} – ${a.out}${h ? ` · ${h}` : ""}${marks}` };
   }
-  if (a?.in) return { tone: "in", text: `на работе с ${a.in}` };
+  if (a?.in) return { tone: "in", text: `на работе с ${a.in}${marks}` };
   return { tone: "none", text: "не отметилась" };
 }
 
+/** Особые отметки: что нажать и что произойдёт со временем */
+const SPECIAL: { kind: MarkKind; hint: string; placeholder: string }[] = [
+  { kind: "dressing", hint: "Пришла раньше на надевание невесты", placeholder: "Чья невеста, во сколько надевание" },
+  { kind: "photo", hint: "Пришла раньше помочь невесте на фотосессии", placeholder: "Чья невеста, где фотосессия" },
+  { kind: "overtime", hint: "Задержалась после окончания рабочего дня", placeholder: "Почему задержалась" },
+  { kind: "partial", hint: "Пришла позже или ушла раньше", placeholder: "Причина: по семейным, к врачу, отпустила администратор…" },
+];
+
+/** Табель открыт всегда — без ежедневного открытия и закрытия администратором */
 export default function TabelPage() {
-  const { kiosk } = useStore();
-  return <div className="kiosk">{kiosk ? <Board /> : <OpenForm />}</div>;
-}
-
-/* ---------- Утро: администратор открывает табель на день ---------- */
-
-function OpenForm() {
-  const { openKiosk } = useStore();
-  const [login, setLogin] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const d = today();
   return (
-    <form
-      className="kiosk-open"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setError(openKiosk(login, password));
-      }}
-    >
-      <p className="wordmark">LORI</p>
-      <h1 className="kiosk-title">Табель рабочего времени</h1>
-      <p className="kiosk-date">
-        {fmtDay(d)}, {weekday(d)}
-      </p>
-      <p className="muted">Откройте табель на сегодня под учётной записью администратора. После этого сотрудники отмечаются сами.</p>
-      <label className="field">
-        <span className="field-label">Логин администратора</span>
-        <input value={login} onChange={(e) => setLogin(e.target.value)} autoCapitalize="none" autoComplete="username" />
-      </label>
-      <label className="field">
-        <span className="field-label">Пароль</span>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-      </label>
-      {error && (
-        <p className="field-error" role="alert">
-          {error}
-        </p>
-      )}
-      <button type="submit" className="btn btn-block kiosk-big">
-        Открыть табель на сегодня
-      </button>
-    </form>
+    <div className="kiosk">
+      <Board />
+    </div>
   );
 }
 
 /* ---------- День: список сотрудников, каждый отмечается сам ---------- */
 
-type Step = { kind: "list" } | { kind: "pin"; staff: Staff } | { kind: "act"; staff: Staff } | { kind: "done"; staff: Staff; text: string };
+type Step =
+  | { kind: "list" }
+  | { kind: "act"; staff: Staff }
+  | { kind: "special"; staff: Staff; mark: MarkKind }
+  | { kind: "done"; staff: Staff; text: string };
 
 function Board() {
-  const { db, kiosk, mark } = useStore();
+  const { db, mark, markSpecial } = useStore();
   const now = useClock();
   const [step, setStep] = useState<Step>({ kind: "list" });
-  const [closing, setClosing] = useState(false);
   const [askAdmin, setAskAdmin] = useState(false);
   const [manager, setManager] = useState<Staff | null>(null);
   const closeAdmin = useCallback(() => setManager(null), []);
   const team = db.staff.filter((s) => s.active && s.role !== "owner");
   const day = db.attendance.filter((a) => a.date === today());
-  const opener = db.staff.find((s) => s.id === kiosk?.by);
   const d = today();
   const counts = {
     in: day.filter((a) => a.in && !a.out && !a.dayOff).length,
@@ -115,6 +88,10 @@ function Board() {
     mark(staff.id, kind);
     const t = now ? hhmm(new Date()) : "";
     setStep({ kind: "done", staff, text: kind === "in" ? `Пришла в ${t}` : kind === "out" ? `Ушла в ${t}` : "Сегодня выходной" });
+  };
+  const actSpecial = (staff: Staff, kind: MarkKind, note: string) => {
+    markSpecial(staff.id, kind, note);
+    setStep({ kind: "done", staff, text: `${MARK_LABEL[kind]} · ${hhmm(new Date())}` });
   };
 
   return (
@@ -142,7 +119,7 @@ function Board() {
           const st = statusOf(day.find((a) => a.staffId === s.id));
           return (
             <li key={s.id}>
-              <button type="button" className={`kiosk-tile is-${st.tone}`} onClick={() => setStep({ kind: "pin", staff: s })}>
+              <button type="button" className={`kiosk-tile is-${st.tone}`} onClick={() => setStep({ kind: "act", staff: s })}>
                 <span className="kiosk-name">{s.name}</span>
                 <span className="kiosk-status">
                   <span className="kiosk-dot" aria-hidden="true" />
@@ -155,22 +132,30 @@ function Board() {
       </ul>
 
       <footer className="kiosk-foot">
-        <span className="muted small">
-          Табель открыт: {opener ? `${opener.name}${opener.name === ROLE_LABEL[opener.role] ? "" : ` (${ROLE_LABEL[opener.role].toLowerCase()})`}` : "—"}
-        </span>
         <span className="kiosk-foot-actions">
           <button type="button" className="btn btn-ghost" onClick={() => (setStep({ kind: "list" }), setAskAdmin(true))}>
             <Icon name="user" size={18} /> Режим администратора
           </button>
-          <button type="button" className="link-btn small" onClick={() => setClosing(true)}>
-            Закрыть табель
-          </button>
         </span>
       </footer>
 
-      {step.kind === "pin" && <PinPanel staff={step.staff} onCancel={() => setStep({ kind: "list" })} onOk={() => setStep({ kind: "act", staff: step.staff })} />}
       {step.kind === "act" && (
-        <ActPanel staff={step.staff} a={day.find((x) => x.staffId === step.staff.id)} onCancel={() => setStep({ kind: "list" })} onAct={(k) => act(step.staff, k)} />
+        <ActPanel
+          staff={step.staff}
+          a={day.find((x) => x.staffId === step.staff.id)}
+          onCancel={() => setStep({ kind: "list" })}
+          onAct={(k) => act(step.staff, k)}
+          onSpecial={(m) => setStep({ kind: "special", staff: step.staff, mark: m })}
+        />
+      )}
+      {step.kind === "special" && (
+        <SpecialPanel
+          staff={step.staff}
+          kind={step.mark}
+          a={day.find((x) => x.staffId === step.staff.id)}
+          onBack={() => setStep({ kind: "act", staff: step.staff })}
+          onSave={(note) => actSpecial(step.staff, step.mark, note)}
+        />
       )}
       {step.kind === "done" && (
         <Panel onClose={() => setStep({ kind: "list" })} label="Отмечено">
@@ -183,7 +168,6 @@ function Board() {
           </div>
         </Panel>
       )}
-      {closing && <ClosePanel onClose={() => setClosing(false)} />}
       {askAdmin && (
         <AdminLogin
           onClose={() => setAskAdmin(false)}
@@ -208,49 +192,20 @@ function Panel({ children, onClose, label }: { children: React.ReactNode; onClos
   );
 }
 
-/** Сотрудник подтверждает, что это она, — своим паролем от CRM */
-function PinPanel({ staff, onCancel, onOk }: { staff: Staff; onCancel: () => void; onOk: () => void }) {
-  const { checkPassword } = useStore();
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState(false);
-  return (
-    <Panel onClose={onCancel} label={staff.name}>
-      <form
-        className="kiosk-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (checkPassword(staff.id, pw)) onOk();
-          else {
-            setErr(true);
-            setPw("");
-          }
-        }}
-      >
-        <p className="kiosk-panel-name">{staff.name}</p>
-        <label className="field">
-          <span className="field-label">Ваш пароль</span>
-          <input type="password" value={pw} onChange={(e) => (setPw(e.target.value), setErr(false))} autoFocus autoComplete="off" />
-        </label>
-        {err && (
-          <p className="field-error" role="alert">
-            Неверный пароль
-          </p>
-        )}
-        <div className="kiosk-actions">
-          <button type="button" className="btn btn-ghost kiosk-big" onClick={onCancel}>
-            Отмена
-          </button>
-          <button type="submit" className="btn kiosk-big" disabled={!pw}>
-            Далее
-          </button>
-        </div>
-      </form>
-    </Panel>
-  );
-}
-
-/** Три действия: пришла, ушла, выходной — доступны только те, что подходят к текущей отметке */
-function ActPanel({ staff, a, onCancel, onAct }: { staff: Staff; a?: Attendance; onCancel: () => void; onAct: (k: "in" | "out" | "off") => void }) {
+/** Основные действия: пришла, ушла, выходной. Ниже — особые отметки с комментарием */
+function ActPanel({
+  staff,
+  a,
+  onCancel,
+  onAct,
+  onSpecial,
+}: {
+  staff: Staff;
+  a?: Attendance;
+  onCancel: () => void;
+  onAct: (k: "in" | "out" | "off") => void;
+  onSpecial: (k: MarkKind) => void;
+}) {
   const st = statusOf(a);
   const canIn = !a?.in;
   const canOut = !!a?.in && !a.out && !a.dayOff;
@@ -276,7 +231,28 @@ function ActPanel({ staff, a, onCancel, onAct }: { staff: Staff; a?: Attendance;
           Выходной
         </button>
       </div>
-      {a?.in && a.out && <p className="muted small">На сегодня всё отмечено. Если ошиблись — скажите администратору, она поправит.</p>}
+
+      <p className="kiosk-special-title">Особая отметка</p>
+      <div className="kiosk-special">
+        {SPECIAL.map((x) => (
+          <button key={x.kind} type="button" className={`kiosk-sp sp-${x.kind}`} onClick={() => onSpecial(x.kind)}>
+            <strong>{MARK_LABEL[x.kind]}</strong>
+            <span>{x.hint}</span>
+          </button>
+        ))}
+      </div>
+
+      {a?.marks && a.marks.length > 0 && (
+        <ul className="kiosk-marks">
+          {a.marks.map((m, i) => (
+            <li key={i}>
+              <strong>{MARK_LABEL[m.kind]}</strong> · {m.time}
+              {m.note ? ` · ${m.note}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+      {a?.in && a.out && <p className="muted small">Если ошиблись со временем — скажите администратору, она поправит.</p>}
       <button type="button" className="btn btn-ghost btn-block kiosk-big" onClick={onCancel}>
         Отмена
       </button>
@@ -284,40 +260,50 @@ function ActPanel({ staff, a, onCancel, onAct }: { staff: Staff; a?: Attendance;
   );
 }
 
-/** Вечером администратор закрывает табель; на следующий день он закрывается сам */
-function ClosePanel({ onClose }: { onClose: () => void }) {
-  const { closeKiosk } = useStore();
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState(false);
+/** Особая отметка: что произойдёт со временем + комментарий */
+function SpecialPanel({ staff, kind, a, onBack, onSave }: { staff: Staff; kind: MarkKind; a?: Attendance; onBack: () => void; onSave: (note: string) => void }) {
+  const [note, setNote] = useState("");
+  const sp = SPECIAL.find((x) => x.kind === kind)!;
+  const now = hhmm(new Date());
+  const working = !!a?.in && !a.dayOff;
+  const effect =
+    kind === "dressing" || kind === "photo"
+      ? working
+        ? `Вы уже на работе с ${a!.in} — время прихода не изменится, отметка добавится к дню.`
+        : `Приход будет отмечен сейчас: ${now}.`
+      : kind === "overtime"
+        ? working
+          ? `Уход будет отмечен сейчас: ${now}.`
+          : `Приход будет отмечен сейчас: ${now}.`
+        : !working
+          ? `Приход будет отмечен сейчас: ${now} (пришла позже).`
+          : !a?.out
+            ? `Уход будет отмечен сейчас: ${now} (ушла раньше).`
+            : "Отметка добавится к дню.";
   return (
-    <Panel onClose={onClose} label="Закрыть табель">
+    <Panel onClose={onBack} label={MARK_LABEL[kind]}>
       <form
         className="kiosk-form"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!closeKiosk(pw)) {
-            setErr(true);
-            setPw("");
-          }
+          onSave(note);
         }}
       >
-        <p className="kiosk-panel-name">Закрыть табель</p>
-        <p className="muted small">Нужен пароль администратора или владельца. Завтра табель закроется сам — утром его снова откроет администратор.</p>
+        <p className="kiosk-panel-name">{MARK_LABEL[kind]}</p>
+        <p className="muted">
+          {staff.name} · {sp.hint.toLowerCase()}
+        </p>
+        <p className="kiosk-effect">{effect}</p>
         <label className="field">
-          <span className="field-label">Пароль</span>
-          <input type="password" value={pw} onChange={(e) => (setPw(e.target.value), setErr(false))} autoFocus />
+          <span className="field-label">Комментарий</span>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder={sp.placeholder} autoFocus />
         </label>
-        {err && (
-          <p className="field-error" role="alert">
-            Неверный пароль
-          </p>
-        )}
         <div className="kiosk-actions">
-          <button type="button" className="btn btn-ghost kiosk-big" onClick={onClose}>
-            Отмена
+          <button type="button" className="btn btn-ghost kiosk-big" onClick={onBack}>
+            Назад
           </button>
-          <button type="submit" className="btn btn-red kiosk-big" disabled={!pw}>
-            Закрыть
+          <button type="submit" className="btn kiosk-big">
+            Отметить
           </button>
         </div>
       </form>

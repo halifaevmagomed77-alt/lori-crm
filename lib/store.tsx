@@ -5,7 +5,7 @@ import { TEST_ACCOUNTS, createInitial } from "./seed";
 import { createDemo } from "./demo";
 import { clearPhotos, deletePhoto } from "./photos";
 import { addDays, today } from "./dates";
-import type { Attendance, Booking, Bride, DB, DressItem, Payment, Role, Staff, Supplier, Visit } from "./types";
+import type { Attendance, AttendanceMark, Booking, Bride, DB, DressItem, MarkKind, Payment, Role, Staff, Supplier, Visit } from "./types";
 
 const KEY = "lori-crm:v3";
 const USER_KEY = "lori-crm:session-v3";
@@ -265,7 +265,7 @@ function useStoreValue() {
           let attendance = d.attendance;
           for (let day = from; day <= to; day = addDays(day, 1)) {
             const ex = attendance.find((x) => x.staffId === staffId && x.date === day);
-            const patch = { dayOff: true, in: undefined, out: undefined, note: note || undefined, setBy: by };
+            const patch = { dayOff: true, in: undefined, out: undefined, note: note || undefined, setBy: by, marks: undefined };
             attendance = ex ? attendance.map((x) => (x === ex ? { ...ex, ...patch } : x)) : [...attendance, { id: uid("a"), staffId, date: day, ...patch }];
           }
           return { ...d, attendance };
@@ -286,7 +286,36 @@ function useStoreValue() {
               ? { in: nowTime(), out: undefined, dayOff: false, note: undefined, setBy: undefined }
               : kind === "out"
                 ? { out: nowTime() }
-                : { dayOff: true, in: undefined, out: undefined, note: undefined, setBy: undefined };
+                : { dayOff: true, in: undefined, out: undefined, note: undefined, setBy: undefined, marks: undefined };
+          return {
+            ...d,
+            attendance: ex
+              ? d.attendance.map((x) => (x === ex ? { ...ex, ...patch } : x))
+              : [...d.attendance, { id: uid("a"), staffId, date, ...patch }],
+          };
+        }),
+      /**
+       * Особая отметка на планшете текущим временем, с комментарием.
+       * Надевание и фотосессия — пришла раньше: если ещё не отмечалась, это и есть приход.
+       * Переработка — задержалась: это уход. Неполный день — пришла позже или ушла раньше.
+       */
+      markSpecial: (staffId: string, kind: MarkKind, note: string) =>
+        update((d) => {
+          const date = today();
+          const time = nowTime();
+          const ex = d.attendance.find((x) => x.staffId === staffId && x.date === date);
+          const at: Partial<Attendance> = ex && !ex.dayOff ? { ...ex } : { in: undefined, out: undefined };
+          if (kind === "dressing" || kind === "photo") {
+            if (!at.in) at.in = time;
+          } else if (kind === "overtime") {
+            if (!at.in) at.in = time;
+            else at.out = time;
+          } else {
+            if (!at.in) at.in = time;
+            else if (!at.out) at.out = time;
+          }
+          const mk: AttendanceMark = { kind, time, note: note.trim() || undefined };
+          const patch = { in: at.in, out: at.out, dayOff: false, note: undefined, setBy: undefined, marks: [...(ex?.dayOff ? [] : ex?.marks ?? []), mk] };
           return {
             ...d,
             attendance: ex

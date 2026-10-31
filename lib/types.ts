@@ -17,6 +17,18 @@ export const MAX_EMPLOYEES = 30;
 /** login + password — в прототипе хранятся в браузере; в рабочей версии пароль только в виде хэша на сервере */
 export type Staff = { id: ID; name: string; role: Role; active: boolean; phone?: string; login: string; password: string };
 
+/** Особые отметки в табеле: почему день длиннее или короче обычного (10:00–19:00) */
+export type MarkKind = "dressing" | "photo" | "overtime" | "partial";
+export const MARK_LABEL: Record<MarkKind, string> = {
+  dressing: "Надевание",
+  photo: "Фотосессия",
+  overtime: "Переработка",
+  partial: "Неполный день",
+};
+/** Буква рядом со временем в отчётах владельца */
+export const MARK_LETTER: Record<MarkKind, string> = { dressing: "Н", photo: "Ф", overtime: "П", partial: "НД" };
+export type AttendanceMark = { kind: MarkKind; time: string; note?: string };
+
 /** Табель: кто во сколько пришёл и ушёл (видят владелец и администратор) */
 export type Attendance = {
   id: ID;
@@ -27,6 +39,7 @@ export type Attendance = {
   dayOff?: boolean;
   note?: string; // причина выходного: «болеет», «по семейным»
   setBy?: ID; // выходной поставил администратор за сотрудника
+  marks?: AttendanceMark[]; // надевание, фотосессия, переработка, неполный день — с комментарием
 };
 
 /* ---------- Платья ---------- */

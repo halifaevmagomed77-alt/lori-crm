@@ -25,10 +25,10 @@ export default function TimesheetPage() {
       <section className="callout callout-info kiosk-link">
         <Icon name="clock" size={18} />
         <span>
-          Сотрудники отмечаются сами на планшете в салоне. Утром администратор открывает на нём табель по адресу <strong>/tabel</strong> под своей учётной записью.
+          Сотрудники отмечаются сами на планшете в салоне по адресу <strong>/tabel</strong> — табель открыт всегда, без паролей.
         </span>
         <Link href="/tabel" className="btn btn-small">
-          Открыть табель для планшета
+          Табель для планшета
         </Link>
       </section>
 

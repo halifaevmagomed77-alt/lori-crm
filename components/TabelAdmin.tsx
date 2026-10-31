@@ -11,6 +11,16 @@ const ADMIN_IDLE_SECONDS = 120;
 
 const REASONS = ["Болеет", "По семейным обстоятельствам", "Отпуск", "Отгул"];
 
+/** Выходной можно поставить не дальше, чем на два месяца вперёд */
+function maxOffDate(from: string) {
+  const d = new Date(`${from}T12:00:00`);
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + 2);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /**
  * Режим администратора на планшете: выходные за сотрудников и список сотрудников.
  * Открывается паролем администратора или владельца.
@@ -91,7 +101,7 @@ function DaysOff({ manager }: { manager: Staff }) {
 
   return (
     <div className="kadm-body">
-      <p className="muted small">Если сотрудник заболел или не может прийти, поставьте выходной за него. Можно сразу на несколько дней.</p>
+      <p className="muted small">Если сотрудник заболел или не может прийти, поставьте выходной за него. Можно сразу на несколько дней, до двух месяцев вперёд.</p>
       <ul className="kadm-list">
         {team.map((s) => {
           const a = db.attendance.find((x) => x.staffId === s.id && x.date === t);
@@ -138,7 +148,9 @@ function DayOffForm({ staff, onCancel, onSave }: { staff: Staff; onCancel: () =>
   const [from, setFrom] = useState(t);
   const [to, setTo] = useState(t);
   const [note, setNote] = useState("Болеет");
-  const bad = to < from;
+  const max = maxOffDate(t);
+  const tooFar = from > max || to > max;
+  const bad = to < from || tooFar;
   const days = bad ? 0 : Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000) + 1;
   return (
     <form
@@ -159,15 +171,18 @@ function DayOffForm({ staff, onCancel, onSave }: { staff: Staff; onCancel: () =>
         <button type="button" className="btn btn-ghost" onClick={() => (setFrom(t), setTo(addDays(t, 2)))}>
           3 дня
         </button>
+        <button type="button" className="btn btn-ghost" onClick={() => (setFrom(t), setTo(addDays(t, 6)))}>
+          Неделя
+        </button>
       </div>
       <div className="grid-2">
         <label className="field">
           <span className="field-label">С</span>
-          <input type="date" value={from} min={t} onChange={(e) => e.target.value && setFrom(e.target.value)} />
+          <input type="date" value={from} min={t} max={max} onChange={(e) => e.target.value && setFrom(e.target.value)} />
         </label>
         <label className="field">
           <span className="field-label">По</span>
-          <input type="date" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} />
+          <input type="date" value={to} min={from} max={max} onChange={(e) => e.target.value && setTo(e.target.value)} />
         </label>
       </div>
       <label className="field">
@@ -179,9 +194,10 @@ function DayOffForm({ staff, onCancel, onSave }: { staff: Staff; onCancel: () =>
           ))}
         </datalist>
       </label>
+      <p className="muted small">Не дальше чем на два месяца вперёд — до {fmtDay(max)}.</p>
       {bad && (
         <p className="field-error" role="alert">
-          Дата «по» раньше даты «с»
+          {tooFar ? `Можно поставить выходной только до ${fmtDay(max)}` : "Дата «по» раньше даты «с»"}
         </p>
       )}
       <div className="kiosk-actions">
