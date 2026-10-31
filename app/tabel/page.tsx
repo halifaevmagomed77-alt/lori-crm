@@ -237,7 +237,6 @@ function ActPanel({
         {SPECIAL.map((x) => (
           <button key={x.kind} type="button" className={`kiosk-sp sp-${x.kind}`} onClick={() => onSpecial(x.kind)}>
             <strong>{MARK_LABEL[x.kind]}</strong>
-            <span>{x.hint}</span>
           </button>
         ))}
       </div>

@@ -1181,3 +1181,4 @@ html, body { overflow-x: clip; }
 .kiosk-marks { list-style: none; margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--sand, #f3eee7); display: grid; gap: 4px; font-size: 14px; }
 .kiosk-effect { padding: 10px 12px; border-radius: 10px; background: var(--sand, #f3eee7); font-size: 15px; color: var(--ink); }
 @media (max-width: 420px) { .kiosk-special { grid-template-columns: 1fr; } }
+.kiosk-sp { min-height: 56px; place-content: center; text-align: center; }
