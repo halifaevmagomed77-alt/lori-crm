@@ -5,7 +5,7 @@ import { TEST_ACCOUNTS, createInitial } from "./seed";
 import { createDemo } from "./demo";
 import { clearPhotos, deletePhoto } from "./photos";
 import { addDays, today } from "./dates";
-import type { Attendance, AttendanceMark, Booking, Bride, DB, DressItem, MarkKind, Payment, Role, Staff, Supplier, Visit } from "./types";
+import type { Attendance, AttendanceMark, Booking, Bride, DB, DressItem, MarkKind, Payment, Role, Shot, ShotAct, Staff, Supplier, Visit } from "./types";
 
 const KEY = "lori-crm:v3";
 const USER_KEY = "lori-crm:session-v3";
@@ -13,6 +13,10 @@ const KIOSK_KEY = "lori-crm:kiosk";
 
 /** Табель на планшете открыт на сегодня — кем и в какой день */
 export type Kiosk = { by: string; date: string };
+
+/** Добавить фото отметки к дню. undefined — фото выключено, ничего не пишем */
+const withShot = (shots: Shot[] | undefined, act: ShotAct, photo?: string | false): Shot[] | undefined =>
+  photo === undefined ? shots : [...(shots ?? []), photo ? { act, time: nowTime(), photo } : { act, time: nowTime(), noCamera: true }];
 
 const nowTime = () => {
   const d = new Date();
@@ -278,7 +282,8 @@ function useStoreValue() {
         })),
       checkPassword: (staffId: string, password: string) => db.staff.some((s) => s.id === staffId && s.active && s.password === password),
       /** Отметка сотрудника на планшете текущим временем */
-      mark: (staffId: string, kind: "in" | "out" | "off") =>
+      /** photo: ссылка на снимок; false — фото включено, но камера не сработала; undefined — фото выключено */
+      mark: (staffId: string, kind: "in" | "out" | "off", photo?: string | false) =>
         update((d) => {
           const date = today();
           const ex = d.attendance.find((x) => x.staffId === staffId && x.date === date);
@@ -288,11 +293,12 @@ function useStoreValue() {
               : kind === "out"
                 ? { out: nowTime() }
                 : { dayOff: true, in: undefined, out: undefined, note: undefined, setBy: undefined, marks: undefined };
+          const shots = withShot(ex?.shots, kind, photo);
           return {
             ...d,
             attendance: ex
-              ? d.attendance.map((x) => (x === ex ? { ...ex, ...patch } : x))
-              : [...d.attendance, { id: uid("a"), staffId, date, ...patch }],
+              ? d.attendance.map((x) => (x === ex ? { ...ex, ...patch, shots } : x))
+              : [...d.attendance, { id: uid("a"), staffId, date, ...patch, shots }],
           };
         }),
       /**
@@ -300,7 +306,7 @@ function useStoreValue() {
        * Надевание и фотосессия — пришла раньше: если ещё не отмечалась, это и есть приход.
        * Переработка — задержалась: это уход. Неполный день — пришла позже или ушла раньше.
        */
-      markSpecial: (staffId: string, kind: MarkKind, note: string) =>
+      markSpecial: (staffId: string, kind: MarkKind, note: string, photo?: string | false) =>
         update((d) => {
           const date = today();
           const time = nowTime();
@@ -316,7 +322,15 @@ function useStoreValue() {
             else if (!at.out) at.out = time;
           }
           const mk: AttendanceMark = { kind, time, note: note.trim() || undefined };
-          const patch = { in: at.in, out: at.out, dayOff: false, note: undefined, setBy: undefined, marks: [...(ex?.dayOff ? [] : ex?.marks ?? []), mk] };
+          const patch = {
+            in: at.in,
+            out: at.out,
+            dayOff: false,
+            note: undefined,
+            setBy: undefined,
+            marks: [...(ex?.dayOff ? [] : ex?.marks ?? []), mk],
+            shots: withShot(ex?.shots, kind, photo),
+          };
           return {
             ...d,
             attendance: ex
@@ -324,6 +338,8 @@ function useStoreValue() {
               : [...d.attendance, { id: uid("a"), staffId, date, ...patch }],
           };
         }),
+      /** Фото при отметке в табеле — включить или выключить (откат функции без правки кода) */
+      setTabelPhoto: (on: boolean) => update((d) => ({ ...d, settings: { ...d.settings, tabelPhoto: on } })),
       /** Комментарий — единственное, что консультант может менять после сохранения */
       saveComment: (target: "bride" | "booking", id: string, notes: string) =>
         update((d) =>

@@ -5,6 +5,7 @@ import { TabelAdmin } from "@/components/TabelAdmin";
 import { Icon } from "@/components/ui";
 import { fmtDay, today, weekday } from "@/lib/dates";
 import { fmtMinutes, workMinutes } from "@/lib/derive";
+import { saveBlob } from "@/lib/photos";
 import { useStore } from "@/lib/store";
 import { MARK_LABEL, type Attendance, type MarkKind, type Staff } from "@/lib/types";
 
@@ -88,8 +89,90 @@ type Step =
   | { kind: "special"; staff: Staff; mark: MarkKind }
   | { kind: "done"; staff: Staff; text: string };
 
+/* ---------- Фото при отметке: фронтальная камера планшета ---------- */
+
+type Cam = { error: boolean; attach: (el: HTMLVideoElement | null) => void; snap: () => Promise<string | false> };
+
+/** Камера включена, пока открыт экран сотрудника; снимок делается в момент нажатия кнопки */
+function useCamera(on: boolean): Cam {
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const connect = () => {
+    const v = videoRef.current;
+    const m = streamRef.current;
+    if (v && m && v.srcObject !== m) {
+      v.srcObject = m;
+      v.play().catch(() => {});
+    }
+  };
+  useEffect(() => {
+    if (!on) return;
+    let alive = true;
+    let s: MediaStream | null = null;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      queueMicrotask(() => alive && setError(true));
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "user", width: { ideal: 640 } }, audio: false })
+      .then((m) => {
+        if (!alive) return m.getTracks().forEach((t) => t.stop());
+        s = m;
+        streamRef.current = m;
+        setStream(m);
+        setError(false);
+      })
+      .catch(() => alive && setError(true));
+    return () => {
+      alive = false;
+      s?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setStream(null);
+    };
+  }, [on]);
+  // поток подключается к <video>, когда есть и то и другое
+  useEffect(connect, [stream]);
+  const attach = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    connect();
+  }, []);
+  const snap = useCallback(async (): Promise<string | false> => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return false;
+    const scale = Math.min(1, 480 / v.videoWidth);
+    const c = document.createElement("canvas");
+    c.width = Math.round(v.videoWidth * scale);
+    c.height = Math.round(v.videoHeight * scale);
+    c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
+    try {
+      const blob: Blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("toBlob"))), "image/jpeg", 0.75));
+      return await saveBlob(blob);
+    } catch {
+      return false;
+    }
+  }, []);
+  return { error, attach, snap };
+}
+
+function CameraBox({ error, attach }: { error: boolean; attach: (el: HTMLVideoElement | null) => void }) {
+  return (
+    <div className="kiosk-cam">
+      {error ? (
+        <p className="kiosk-cam-off">Камера недоступна — отметка сохранится без фото</p>
+      ) : (
+        <video ref={attach} className="kiosk-cam-video" muted playsInline autoPlay aria-label="Камера" />
+      )}
+      <span className="kiosk-cam-note">При отметке делается фото</span>
+    </div>
+  );
+}
+
 function Board() {
   const { db, mark, markSpecial } = useStore();
+  // фото при отметке — выключается в режиме администратора (по умолчанию включено)
+  const photoOn = db.settings?.tabelPhoto !== false;
   const now = useClock();
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [askAdmin, setAskAdmin] = useState(false);
@@ -103,6 +186,9 @@ function Board() {
     off: day.filter((a) => a.dayOff).length,
   };
 
+  const cam = useCamera(photoOn && (step.kind === "act" || step.kind === "special"));
+  const shot = async () => (photoOn ? await cam.snap() : undefined);
+
   // экран сотрудника не висит открытым: без действий возвращаемся к списку
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => {
@@ -112,13 +198,13 @@ function Board() {
     return () => window.clearTimeout(timer.current);
   }, [step]);
 
-  const act = (staff: Staff, kind: "in" | "out" | "off") => {
-    mark(staff.id, kind);
+  const act = async (staff: Staff, kind: "in" | "out" | "off") => {
+    mark(staff.id, kind, await shot());
     const t = now ? hhmm(new Date()) : "";
     setStep({ kind: "done", staff, text: kind === "in" ? `Пришла в ${t}` : kind === "out" ? `Ушла в ${t}` : "Сегодня выходной" });
   };
-  const actSpecial = (staff: Staff, kind: MarkKind, note: string) => {
-    markSpecial(staff.id, kind, note);
+  const actSpecial = async (staff: Staff, kind: MarkKind, note: string) => {
+    markSpecial(staff.id, kind, note, await shot());
     setStep({ kind: "done", staff, text: `${MARK_LABEL[kind]} · ${hhmm(new Date())}` });
   };
 
@@ -174,6 +260,7 @@ function Board() {
           onCancel={() => setStep({ kind: "list" })}
           onAct={(k) => act(step.staff, k)}
           onSpecial={(m) => setStep({ kind: "special", staff: step.staff, mark: m })}
+          camera={photoOn ? <CameraBox error={cam.error} attach={cam.attach} /> : null}
         />
       )}
       {step.kind === "special" && (
@@ -183,6 +270,7 @@ function Board() {
           a={day.find((x) => x.staffId === step.staff.id)}
           onBack={() => setStep({ kind: "act", staff: step.staff })}
           onSave={(note) => actSpecial(step.staff, step.mark, note)}
+          camera={photoOn ? <CameraBox error={cam.error} attach={cam.attach} /> : null}
         />
       )}
       {step.kind === "done" && (
@@ -227,12 +315,14 @@ function ActPanel({
   onCancel,
   onAct,
   onSpecial,
+  camera,
 }: {
   staff: Staff;
   a?: Attendance;
   onCancel: () => void;
   onAct: (k: "in" | "out" | "off") => void;
   onSpecial: (k: MarkKind) => void;
+  camera: React.ReactNode;
 }) {
   const st = statusOf(a);
   const ok = allowed(a);
@@ -242,6 +332,7 @@ function ActPanel({
   const setter = useStore().db.staff.find((s) => s.id === a?.setBy);
   return (
     <Panel onClose={onCancel} label={staff.name}>
+      {camera}
       <p className="kiosk-panel-name">{staff.name}</p>
       <p className={`kiosk-status is-${st.tone}`}>
         <span className="kiosk-dot" aria-hidden="true" />
@@ -297,7 +388,21 @@ function ActPanel({
 }
 
 /** Особая отметка: что произойдёт со временем + комментарий */
-function SpecialPanel({ staff, kind, a, onBack, onSave }: { staff: Staff; kind: MarkKind; a?: Attendance; onBack: () => void; onSave: (note: string) => void }) {
+function SpecialPanel({
+  staff,
+  kind,
+  a,
+  onBack,
+  onSave,
+  camera,
+}: {
+  staff: Staff;
+  kind: MarkKind;
+  a?: Attendance;
+  onBack: () => void;
+  onSave: (note: string) => void;
+  camera: React.ReactNode;
+}) {
   const [note, setNote] = useState("");
   const sp = SPECIAL.find((x) => x.kind === kind)!;
   const now = hhmm(new Date());
@@ -318,6 +423,7 @@ function SpecialPanel({ staff, kind, a, onBack, onSave }: { staff: Staff; kind: 
             : "Отметка добавится к дню.";
   return (
     <Panel onClose={onBack} label={MARK_LABEL[kind]}>
+      {camera}
       <form
         className="kiosk-form"
         onSubmit={(e) => {

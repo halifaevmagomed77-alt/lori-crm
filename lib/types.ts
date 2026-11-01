@@ -29,6 +29,12 @@ export const MARK_LABEL: Record<MarkKind, string> = {
 export const MARK_LETTER: Record<MarkKind, string> = { dressing: "Н", photo: "Ф", overtime: "П", partial: "НД" };
 export type AttendanceMark = { kind: MarkKind; time: string; note?: string };
 
+/** Фото при отметке на планшете: кто на самом деле нажал кнопку */
+export type ShotAct = "in" | "out" | "off" | MarkKind;
+export const SHOT_LABEL: Record<ShotAct, string> = { in: "Пришла", out: "Ушла", off: "Выходной", ...MARK_LABEL };
+/** photo — "idb:<id>"; noCamera — фото включено, но камера не сработала */
+export type Shot = { act: ShotAct; time: string; photo?: string; noCamera?: boolean };
+
 /** Табель: кто во сколько пришёл и ушёл (видят владелец и администратор) */
 export type Attendance = {
   id: ID;
@@ -40,6 +46,7 @@ export type Attendance = {
   note?: string; // причина выходного: «болеет», «по семейным»
   setBy?: ID; // выходной поставил администратор за сотрудника
   marks?: AttendanceMark[]; // надевание, фотосессия, переработка, неполный день — с комментарием
+  shots?: Shot[]; // фото при каждой отметке на планшете (если включено)
 };
 
 /* ---------- Платья ---------- */
@@ -168,6 +175,8 @@ export type Cleaning = { id: ID; itemId: ID; bookingId?: ID; sentAt: DateStr; ba
 export type DB = {
   version: 3;
   demo?: boolean; // в базе пример данных, а не реальная работа салона
+  /** tabelPhoto — фото при отметке в табеле на планшете (по умолчанию включено) */
+  settings?: { tabelPhoto?: boolean };
   staff: Staff[];
   attendance: Attendance[];
   suppliers: Supplier[];

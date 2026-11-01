@@ -1185,3 +1185,15 @@ html, body { overflow-x: clip; }
 .kiosk-sp:disabled { background: #f2efeb; color: #b5aea6; border-color: transparent; cursor: default; }
 .kadm-out { display: flex; gap: 8px; align-items: center; }
 .kadm-out input { min-height: 44px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 10px; font-size: 16px; }
+
+/* Табель: фото при отметке */
+.kiosk-cam { position: relative; display: grid; justify-items: center; gap: 4px; margin-bottom: 4px; }
+.kiosk-cam-video { width: 132px; height: 132px; border-radius: 50%; object-fit: cover; transform: scaleX(-1); background: #e8e3dc; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); }
+.kiosk-cam-note { font-size: 12px; color: var(--stone); }
+.kiosk-cam-off { font-size: 13px; color: var(--bad); padding: 8px 12px; border-radius: 10px; background: var(--bad-bg); text-align: center; }
+.kadm-switch { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 14px; border-radius: 12px; background: var(--sand, #f3eee7); }
+.kadm-shots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.kadm-shot { display: grid; gap: 4px; }
+.kadm-shot.is-missing .kadm-state { color: var(--bad); }
+.kadm-shot-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; background: #e8e3dc; }
+.kadm-shot-img.is-empty { display: grid; place-items: center; color: var(--stone); font-size: 13px; }

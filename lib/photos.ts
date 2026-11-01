@@ -42,6 +42,13 @@ export async function savePhoto(file: File): Promise<string> {
   return `idb:${id}`;
 }
 
+/** Снимок с камеры (уже сжатый) — сохранить и вернуть ссылку "idb:<id>" */
+export async function saveBlob(blob: Blob): Promise<string> {
+  const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  await tx("readwrite", (s) => s.put(blob, id));
+  return `idb:${id}`;
+}
+
 export async function deletePhoto(ref?: string) {
   if (!ref?.startsWith("idb:")) return;
   try {

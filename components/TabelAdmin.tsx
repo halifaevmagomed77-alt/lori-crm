@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { addDays, fmtDay, fmtShort, today, weekday } from "@/lib/dates";
 import { useStore } from "@/lib/store";
-import { MAX_EMPLOYEES, ROLE_LABEL, type Attendance, type Staff } from "@/lib/types";
+import { usePhoto } from "@/lib/photos";
+import { MAX_EMPLOYEES, ROLE_LABEL, SHOT_LABEL, type Attendance, type Staff } from "@/lib/types";
 import { Icon } from "./ui";
 
 /** Режим администратора закрывается сам, если планшет оставили без присмотра */
@@ -26,7 +27,7 @@ function maxOffDate(from: string) {
  * Открывается паролем администратора или владельца.
  */
 export function TabelAdmin({ manager, onClose }: { manager: Staff; onClose: () => void }) {
-  const [tab, setTab] = useState<"off" | "noout" | "staff">("off");
+  const [tab, setTab] = useState<"off" | "noout" | "photo" | "staff">("off");
   const { db } = useStore();
   const noOutCount = forgotOut(db.attendance, db.staff).length;
 
@@ -69,14 +70,81 @@ export function TabelAdmin({ manager, onClose }: { manager: Staff; onClose: () =
           <button type="button" role="tab" aria-selected={tab === "noout"} onClick={() => setTab("noout")}>
             Не отметили уход{noOutCount ? ` · ${noOutCount}` : ""}
           </button>
+          <button type="button" role="tab" aria-selected={tab === "photo"} onClick={() => setTab("photo")}>
+            Фото
+          </button>
           <button type="button" role="tab" aria-selected={tab === "staff"} onClick={() => setTab("staff")}>
             Сотрудники
           </button>
         </div>
-        {tab === "off" ? <DaysOff manager={manager} /> : tab === "noout" ? <NoOut /> : <StaffList />}
+        {tab === "off" ? <DaysOff manager={manager} /> : tab === "noout" ? <NoOut /> : tab === "photo" ? <Photos /> : <StaffList />}
       </section>
     </div>
   );
+}
+
+/* ---------- Фото при отметке: выключатель и снимки за день ---------- */
+
+function Photos() {
+  const { db, setTabelPhoto } = useStore();
+  const on = db.settings?.tabelPhoto !== false;
+  const [date, setDate] = useState(today());
+  const name = (id: string) => db.staff.find((s) => s.id === id)?.name ?? "—";
+  const rows = db.attendance
+    .filter((a) => a.date === date && a.shots?.length)
+    .flatMap((a) => a.shots!.map((sh, i) => ({ key: `${a.id}-${i}`, staffId: a.staffId, sh })))
+    .sort((x, y) => y.sh.time.localeCompare(x.sh.time));
+  return (
+    <div className="kadm-body">
+      <div className="kadm-switch">
+        <div>
+          <p className="kadm-title">Фото при отметке</p>
+          <p className="muted small">
+            {on
+              ? "Включено: при каждой отметке фронтальная камера планшета делает снимок. Так видно, кто на самом деле нажал кнопку."
+              : "Выключено: сотрудники отмечаются без фото, как раньше. Старые снимки сохраняются."}
+          </p>
+        </div>
+        <button type="button" className={`btn kiosk-big${on ? " btn-ghost" : ""}`} onClick={() => setTabelPhoto(!on)}>
+          {on ? "Выключить" : "Включить"}
+        </button>
+      </div>
+
+      <div className="kadm-quick">
+        <button type="button" className="btn btn-ghost" aria-label="Предыдущий день" onClick={() => setDate(addDays(date, -1))}>
+          ←
+        </button>
+        <span className="kadm-title">
+          {date === today() ? "Сегодня" : fmtShort(date)}, {weekday(date)}
+        </span>
+        <button type="button" className="btn btn-ghost" aria-label="Следующий день" disabled={date >= today()} onClick={() => setDate(addDays(date, 1))}>
+          →
+        </button>
+      </div>
+      {rows.length ? (
+        <ul className="kadm-shots">
+          {rows.map((r) => (
+            <li key={r.key} className={`kadm-shot${r.sh.noCamera ? " is-missing" : ""}`}>
+              <ShotImg src={r.sh.photo} />
+              <span className="kadm-name">{name(r.staffId)}</span>
+              <span className="kadm-state">
+                {SHOT_LABEL[r.sh.act]} · {r.sh.time}
+                {r.sh.noCamera ? " · без фото, камера не сработала" : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted small">За этот день снимков нет.</p>
+      )}
+    </div>
+  );
+}
+
+function ShotImg({ src }: { src?: string }) {
+  const url = usePhoto(src);
+  if (!src || !url) return <span className="kadm-shot-img is-empty">нет фото</span>;
+  return <img className="kadm-shot-img" src={url} alt="Фото при отметке" />;
 }
 
 /* ---------- Не отметили уход за последние 7 дней ---------- */
