@@ -1,7 +1,7 @@
 /*
  * Общее хранилище демо-базы и фото — чтобы данные были одинаковыми на всех устройствах.
  *
- * На Vercel — Vercel Blob (приватные файлы, нужен BLOB_READ_WRITE_TOKEN: Storage → Blob → Connect).
+ * На Vercel — Vercel Blob (приватные файлы; Storage → Blob → Connect to Project даёт BLOB_STORE_ID).
  * Локально без токена — временная папка (LORI_LOCAL_SYNC_DIR), если задано LORI_LOCAL_SYNC=1 (для проверки).
  * Ни того ни другого — синхронизация выключена, CRM работает как раньше, только в браузере.
  */
@@ -11,7 +11,8 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 
-const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
+// подключение через Vercel (OIDC) даёт BLOB_STORE_ID; старое подключение — BLOB_READ_WRITE_TOKEN
+const USE_BLOB = !!process.env.BLOB_STORE_ID || !!process.env.BLOB_READ_WRITE_TOKEN;
 // вне папки проекта: иначе сервер разработки перезагружает страницу при каждой записи
 const LOCAL_DIR = process.env.LORI_LOCAL_SYNC_DIR || path.join(os.tmpdir(), "lori-crm-sync");
 const USE_LOCAL = !USE_BLOB && process.env.LORI_LOCAL_SYNC === "1";
