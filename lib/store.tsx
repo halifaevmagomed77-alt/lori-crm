@@ -3,7 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { TEST_ACCOUNTS, createInitial } from "./seed";
 import { createDemo } from "./demo";
-import { clearPhotos, deletePhoto } from "./photos";
+import { clearPhotos, deletePhoto, retryPhotoUploads } from "./photos";
+import { pullDb, pushDb } from "./sync";
 import { addDays, today } from "./dates";
 import type { Attendance, AttendanceMark, Booking, Bride, DB, DressItem, MarkKind, Payment, Role, Shot, ShotAct, Staff, Supplier, Visit } from "./types";
 
@@ -13,6 +14,8 @@ const KIOSK_KEY = "lori-crm:kiosk";
 
 /** Табель на планшете открыт на сегодня — кем и в какой день */
 export type Kiosk = { by: string; date: string };
+/** local — только в этом браузере; synced — общая база сохранена; saving — сохраняется; offline — нет связи, изменения ждут */
+export type SyncState = "local" | "synced" | "saving" | "offline";
 
 /** Добавить фото отметки к дню. undefined — фото выключено, ничего не пишем */
 const withShot = (shots: Shot[] | undefined, act: ShotAct, photo?: string | false): Shot[] | undefined =>
@@ -191,7 +194,135 @@ function useStoreValue() {
     } catch {}
   }, [db]);
 
-  const update = useCallback((fn: (d: DB) => DB) => setDb((d) => (d ? fn(d) : d)), []);
+  /* ---------- Общая база для всех устройств (демо) ----------
+   * Каждое изменение — функция над базой. Пока сервер её не принял, она лежит в pending.
+   * Если базу успели изменить с другого устройства, берём свежую с сервера и заново
+   * применяем к ней свои ещё не сохранённые изменения — так ничего не теряется.
+   */
+  const sync = useRef({ on: false, etag: null as string | null, pending: [] as ((d: DB) => DB)[], saving: false, again: false, fromServer: false, lastPull: 0 });
+  const dbRef = useRef<DB | null>(null);
+  const saveTimer = useRef<number | undefined>(undefined);
+  const [syncState, setSyncState] = useState<SyncState>("local");
+
+  const update = useCallback((fn: (d: DB) => DB) => {
+    sync.current.pending.push(fn);
+    setDb((d) => (d ? fn(d) : d));
+  }, []);
+
+  /** База пришла с сервера: показать её, не отправляя обратно */
+  const fromServer = useCallback((next: DB) => {
+    sync.current.fromServer = true;
+    setDb(next);
+  }, []);
+
+  const save = useCallback(async () => {
+    const st = sync.current;
+    if (!st.on || !dbRef.current) return;
+    if (st.saving) {
+      st.again = true;
+      return;
+    }
+    st.saving = true;
+    setSyncState("saving");
+    const n = st.pending.length;
+    const r = await pushDb(dbRef.current, st.etag);
+    st.saving = false;
+    if (r.kind === "ok") {
+      st.etag = r.etag;
+      st.pending.splice(0, n);
+      setSyncState("synced");
+    } else if (r.kind === "conflict" && r.db) {
+      // с другого устройства успели сохранить — накладываем свои изменения на свежую базу и пробуем снова
+      st.etag = r.etag;
+      const merged = st.pending.reduce((d, fn) => fn(d), r.db);
+      setDb(merged);
+      return;
+    } else if (r.kind === "off") {
+      st.on = false;
+      setSyncState("local");
+      return;
+    } else {
+      setSyncState("offline");
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => void save(), 10_000);
+      return;
+    }
+    if (st.again) {
+      st.again = false;
+      void save();
+    }
+  }, []);
+
+  const pull = useCallback(async () => {
+    const st = sync.current;
+    st.lastPull = Date.now();
+    const r = await pullDb();
+    if (r.kind === "off") {
+      st.on = false;
+      setSyncState("local");
+      return;
+    }
+    if (r.kind === "error") {
+      if (st.on) setSyncState("offline");
+      return;
+    }
+    st.on = true;
+    if (r.kind === "empty") {
+      // базы на сервере ещё нет — отправляем свою
+      st.etag = null;
+      void save();
+      return;
+    }
+    if (r.etag === st.etag) {
+      setSyncState("synced");
+      return;
+    }
+    st.etag = r.etag;
+    if (st.pending.length) setDb(st.pending.reduce((d, fn) => fn(d), r.db));
+    else fromServer(r.db);
+    setSyncState("synced");
+  }, [save, fromServer]);
+
+  // после загрузки из браузера — берём общую базу с сервера
+  const started = useRef(false);
+  useEffect(() => {
+    dbRef.current = db;
+    if (!db) return;
+    if (!started.current) {
+      started.current = true;
+      void pull().then(retryPhotoUploads);
+      return;
+    }
+    const st = sync.current;
+    if (st.fromServer) {
+      st.fromServer = false;
+      return;
+    }
+    if (!st.on) return;
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => void save(), 1200);
+  }, [db, pull, save]);
+
+  // вернулись на вкладку — подтягиваем свежее; открытый экран (планшет) — раз в 10 минут
+  useEffect(() => {
+    const fresh = () => {
+      const st = sync.current;
+      if (document.visibilityState !== "visible" || !st.on || st.saving || st.pending.length) return;
+      if (Date.now() - st.lastPull < 20_000) return;
+      void pull();
+    };
+    const t = window.setInterval(() => {
+      sync.current.lastPull = 0;
+      fresh();
+    }, 10 * 60_000);
+    document.addEventListener("visibilitychange", fresh);
+    window.addEventListener("focus", fresh);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", fresh);
+      window.removeEventListener("focus", fresh);
+    };
+  }, [pull]);
   const toast = useCallback((text: string) => {
     const tid = Date.now() + Math.random();
     setToasts((t) => [...t, { id: tid, text }]);
@@ -215,6 +346,10 @@ function useStoreValue() {
     return {
       db,
       user,
+      /** состояние общей базы для плашки «Демо» */
+      syncState,
+      /** подтянуть свежие данные с сервера вручную */
+      refresh: () => void pull(),
       role: (user?.role ?? "employee") as Role,
       can: (p: Permission) => !!user && can(user.role, p),
       /** Возвращает текст ошибки или null при успешном входе */
@@ -502,7 +637,7 @@ function useStoreValue() {
       fillDemo: (): string | null => {
         try {
           const demo = createDemo(db.staff);
-          setDb(demo);
+          update(() => demo);
           resetLayers();
           return null;
         } catch (e) {
@@ -531,12 +666,12 @@ function useStoreValue() {
           };
         }),
       clearAll: () => {
-        setDb((d) => ({ ...createInitial(), staff: d?.staff ?? createInitial().staff }));
+        update((d) => ({ ...createInitial(), staff: d.staff }));
         clearPhotos();
         resetLayers();
       },
     };
-  }, [db, userId, sheet, dialog, toasts, toast, update, kiosk, pushLayer, back, resetLayers]);
+  }, [db, userId, sheet, dialog, toasts, toast, update, kiosk, pushLayer, back, resetLayers, syncState, pull]);
 }
 
 export type Store = NonNullable<ReturnType<typeof useStoreValue>>;

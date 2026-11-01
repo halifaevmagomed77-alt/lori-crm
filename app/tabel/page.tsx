@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SyncBadge } from "@/components/Demo";
 import { TabelAdmin } from "@/components/TabelAdmin";
 import { Icon } from "@/components/ui";
 import { fmtDay, today, weekday } from "@/lib/dates";
@@ -170,7 +171,7 @@ function CameraBox({ error, attach }: { error: boolean; attach: (el: HTMLVideoEl
 }
 
 function Board() {
-  const { db, mark, markSpecial } = useStore();
+  const { db, mark, markSpecial, syncState, refresh } = useStore();
   // фото при отметке — выключается в режиме администратора (по умолчанию включено)
   const photoOn = db.settings?.tabelPhoto !== false;
   const now = useClock();
@@ -246,6 +247,7 @@ function Board() {
       </ul>
 
       <footer className="kiosk-foot">
+        <SyncBadge state={syncState} onRefresh={refresh} />
         <span className="kiosk-foot-actions">
           <button type="button" className="btn btn-ghost" onClick={() => (setStep({ kind: "list" }), setAskAdmin(true))}>
             <Icon name="user" size={18} /> Режим администратора

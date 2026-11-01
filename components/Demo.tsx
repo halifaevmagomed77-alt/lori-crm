@@ -22,7 +22,7 @@ const SECTION: Record<string, string> = {
 
 /** Плашка демо-версии над содержимым страницы */
 export function DemoBar() {
-  const { db, can, openDialog, clearAll, toast } = useStore();
+  const { db, can, openDialog, clearAll, toast, syncState, refresh } = useStore();
   return (
     <div className="demo-bar" role="note">
       <span className="demo-tag">Демо</span>
@@ -42,10 +42,33 @@ export function DemoBar() {
           Очистить пример
         </button>
       )}
+      <SyncBadge state={syncState} onRefresh={refresh} />
       <button type="button" className="btn btn-small demo-feedback" onClick={() => openDialog({ kind: "feedback" })}>
         <Icon name="chat" size={16} /> Замечание
       </button>
     </div>
+  );
+}
+
+const SYNC_TEXT = {
+  synced: "Общая база — видна на всех устройствах",
+  saving: "Сохраняю в общую базу…",
+  offline: "Нет связи — изменения сохранены здесь и уйдут позже",
+  local: "Данные только на этом устройстве",
+} as const;
+
+/** Где сейчас данные: в общей базе или только в этом браузере */
+export function SyncBadge({ state, onRefresh }: { state: keyof typeof SYNC_TEXT; onRefresh: () => void }) {
+  return (
+    <span className={`sync-badge is-${state}`} role="status">
+      <span className="sync-dot" aria-hidden="true" />
+      {SYNC_TEXT[state]}
+      {state === "synced" && (
+        <button type="button" className="link-btn small" onClick={onRefresh}>
+          Обновить
+        </button>
+      )}
+    </span>
   );
 }
 
