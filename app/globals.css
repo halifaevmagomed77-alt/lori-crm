@@ -1219,3 +1219,14 @@ html, body { overflow-x: clip; }
 .ph-num { white-space: nowrap; }
 .rc-line b.rc-phones { white-space: normal; }
 .ef-line-block .ef-phone-extra .ef-who { flex: 0 0 40%; }
+
+/* Поступление: несколько размеров одной модели */
+.sizes-pick { display: grid; gap: 10px; }
+.sizes-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.size-chip { min-width: 52px; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; }
+.size-chip.is-on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.sizes-counts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sizes-counts li { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 10px; background: var(--sand, #f3eee7); }
+.stepper { display: inline-flex; align-items: center; gap: 10px; }
+.stepper button { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line-strong); background: #fff; font-size: 18px; cursor: pointer; }
+.stepper b { min-width: 48px; text-align: center; }

@@ -1209,11 +1209,58 @@ function MoneyInput({
   );
 }
 
+const SIZES = ["38", "40", "42", "44", "46", "48", "50", "52", "54"];
+
+/** Поступление: сразу несколько размеров одной модели, по каждому — сколько штук */
+function SizesPicker({ value, onChange, error }: { value: Record<string, number>; onChange: (v: Record<string, number>) => void; error?: string }) {
+  const set = (s: string, n: number) => {
+    const next = { ...value };
+    if (n <= 0) delete next[s];
+    else next[s] = Math.min(n, 20);
+    onChange(next);
+  };
+  return (
+    <div className="sizes-pick">
+      <div className="sizes-chips" role="group" aria-label="Размеры">
+        {SIZES.map((s) => (
+          <button key={s} type="button" className={`size-chip${value[s] ? " is-on" : ""}`} aria-pressed={!!value[s]} onClick={() => set(s, value[s] ? 0 : 1)}>
+            {s}
+          </button>
+        ))}
+      </div>
+      {Object.keys(value).length > 0 && (
+        <ul className="sizes-counts">
+          {SIZES.filter((s) => value[s]).map((s) => (
+            <li key={s}>
+              <span>Размер {s}</span>
+              <span className="stepper">
+                <button type="button" aria-label={`Меньше, размер ${s}`} onClick={() => set(s, value[s] - 1)}>
+                  −
+                </button>
+                <b aria-label={`Штук размера ${s}`}>{value[s]} шт.</b>
+                <button type="button" aria-label={`Больше, размер ${s}`} onClick={() => set(s, value[s] + 1)}>
+                  +
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <span className="field-error">{error}</span>}
+    </div>
+  );
+}
+
 function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) {
   const { db, saveItem, removeItem, toast, open, closeDialogAndSheet } = useStore();
   const models = [...new Set(db.items.map((i) => i.model))].sort();
   const [model, setModel] = useState(item?.model ?? "");
   const [size, setSize] = useState(item?.size ?? "44");
+  // новое поступление: размер → сколько штук
+  const [sizes, setSizes] = useState<Record<string, number>>({});
+  const total = Object.values(sizes).reduce((a, n) => a + n, 0);
+  const sameModel = db.items.filter((i) => !i.retired && i.id !== item?.id && model.trim() && i.model.toLowerCase() === model.trim().toLowerCase());
+  const sameSizes = [...new Set(sameModel.map((i) => i.size))].sort((a, b) => Number(a) - Number(b));
   const [supplier, setSupplier] = useState(item?.supplierId ?? db.suppliers[0]?.id ?? "");
   const [purchase, setPurchase] = useState(String(item?.purchasePrice || ""));
   const [purchaseCur, setPurchaseCur] = useState<Currency>(item?.purchaseCurrency ?? "RUB");
@@ -1233,16 +1280,13 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
       footer={
         <Foot
           onClose={onClose}
-          label={item ? "Сохранить" : "Добавить в салон"}
+          label={item ? "Сохранить" : total > 1 ? `Добавить в салон · ${total} шт.` : "Добавить в салон"}
           onSubmit={() => {
             setTried(true);
-            if (!model.trim() || !rent) return;
-            if (item?.photo && item.photo !== photo) deletePhoto(item.photo);
-            const saved = saveItem({
-              ...(item ?? {}),
-              id: item?.id,
+            if (!model.trim() || !rent || (!item && !total)) return;
+            if (item?.photo && item.photo !== photo && !db.items.some((i) => i.id !== item.id && i.photo === item.photo)) deletePhoto(item.photo);
+            const base = {
               model: model.trim(),
-              size,
               supplierId: supplier,
               purchasePrice: Number(purchase) || 0,
               purchaseCurrency: purchaseCur,
@@ -1251,10 +1295,19 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
               rentPrice: Number(rent),
               receivedAt: received,
               photo,
-            });
-            toast(item ? "Сохранено" : `${saved.model} добавлено`);
+            };
+            if (item) {
+              saveItem({ ...item, ...base, size });
+              toast("Сохранено");
+              onClose();
+              return;
+            }
+            // каждый экземпляр — отдельное платье: у каждого своя занятость по датам
+            const created = SIZES.filter((s) => sizes[s]).flatMap((s) => Array.from({ length: sizes[s] }, () => saveItem({ ...base, size: s })));
+            const list = SIZES.filter((s) => sizes[s]).map((s) => (sizes[s] > 1 ? `${s} ×${sizes[s]}` : s)).join(", ");
+            toast(created.length > 1 ? `${base.model}: добавлено ${created.length} шт. — р. ${list}` : `${base.model} добавлено`);
             onClose();
-            if (!item) open({ kind: "item", id: saved.id });
+            if (created.length === 1) open({ kind: "item", id: created[0].id });
           }}
         />
       }
@@ -1271,17 +1324,28 @@ function ItemForm({ item, onClose }: { item?: DressItem; onClose: () => void }) 
             ))}
           </datalist>
         </Field>
-        <Field label="Размер">
-          <select value={size} onChange={(e) => setSize(e.target.value)}>
-            {["38", "40", "42", "44", "46", "48", "50", "52", "54"].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </Field>
+        {item && (
+          <Field label="Размер" hint={sameSizes.length ? `Другие размеры этой модели: ${sameSizes.join(", ")}` : undefined}>
+            <select value={size} onChange={(e) => setSize(e.target.value)}>
+              {SIZES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Дата поступления">
           <input type="date" value={received} onChange={(e) => setReceived(e.target.value)} />
         </Field>
       </div>
+      {!item && (
+        <Field
+          group
+          label="Размеры"
+          hint={sameSizes.length ? `Эта модель уже есть в салоне: р. ${sameSizes.join(", ")}. Новые экземпляры добавятся к ним.` : "Отметьте все размеры, которые привезли; если одного размера несколько — укажите сколько."}
+        >
+          <SizesPicker value={sizes} onChange={setSizes} error={tried && !total ? "Выберите хотя бы один размер" : undefined} />
+        </Field>
+      )}
       <Field group label="Поставщик" hint="Видит только владелец">
         <SupplierPicker value={supplier} onChange={setSupplier} />
       </Field>

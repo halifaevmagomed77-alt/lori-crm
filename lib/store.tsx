@@ -468,7 +468,8 @@ function useStoreValue() {
           update((d) => ({ ...d, items: d.items.map((i) => (i.id === id ? { ...i, retired: true } : i)) }));
           return "archived";
         }
-        deletePhoto(item?.photo);
+        // одно фото может быть у нескольких размеров одной модели — удаляем, только если оно больше ни у кого
+        if (item?.photo && !db.items.some((i) => i.id !== id && i.photo === item.photo)) deletePhoto(item.photo);
         update((d) => ({ ...d, items: d.items.filter((i) => i.id !== id) }));
         return "deleted";
       },
