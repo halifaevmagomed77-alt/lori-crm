@@ -15,6 +15,9 @@ const KIOSK_KEY = "lori-crm:kiosk";
 /** Табель на планшете открыт на сегодня — кем и в какой день */
 export type Kiosk = { by: string; date: string };
 /** local — только в этом браузере; synced — общая база сохранена; saving — сохраняется; offline — нет связи, изменения ждут */
+/** В базе нет ничего, кроме учётных записей и настроек */
+const isEmptyDb = (d: DB) => !d.items.length && !d.brides.length && !d.bookings.length && !d.visits.length && !d.attendance.length && !d.suppliers.length;
+
 export type SyncState = "local" | "synced" | "saving" | "offline";
 
 /** Добавить фото отметки к дню. undefined — фото выключено, ничего не пишем */
@@ -277,7 +280,14 @@ function useStoreValue() {
       setSyncState("synced");
       return;
     }
+    // на сервере пустая база (её первым отправило чистое устройство), а здесь уже есть данные —
+    // не затираем их пустотой, а отправляем свои
+    const first = st.etag === null;
     st.etag = r.etag;
+    if (first && isEmptyDb(r.db) && dbRef.current && !isEmptyDb(dbRef.current)) {
+      void save();
+      return;
+    }
     if (st.pending.length) setDb(st.pending.reduce((d, fn) => fn(d), r.db));
     else fromServer(r.db);
     setSyncState("synced");

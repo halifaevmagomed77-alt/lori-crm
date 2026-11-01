@@ -7,7 +7,7 @@ const MAX_BYTES = 3 * 1024 * 1024;
 const valid = (id: string) => /^[a-z0-9]{6,40}$/.test(id);
 const name = (id: string) => `photos/${id}.jpg`;
 
-export async function GET(_req: Request, ctx: RouteContext<"/api/photo/[id]">) {
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await ctx.params;
   if (!syncEnabled) return new Response(null, { status: 503 });
@@ -18,7 +18,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/photo/[id]">) {
   return new Response(new Uint8Array(f.data), { headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=31536000, immutable" } });
 }
 
-export async function PUT(request: Request, ctx: RouteContext<"/api/photo/[id]">) {
+export async function PUT(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (!syncEnabled) return new Response(null, { status: 503 });
   if (!valid(id)) return new Response(null, { status: 400 });
@@ -28,7 +28,7 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/photo/[id]">
   return new Response(null, { status: 204 });
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext<"/api/photo/[id]">) {
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (!syncEnabled) return new Response(null, { status: 503 });
   if (!valid(id)) return new Response(null, { status: 400 });
