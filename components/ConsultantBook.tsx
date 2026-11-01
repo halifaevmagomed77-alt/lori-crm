@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { addDays, today, weekday } from "@/lib/dates";
-import { brideHistory, findBrides, idx, itemConflict, rub, staffShort } from "@/lib/derive";
+import { brideHistory, findBrides, fmtMoney, idx, itemConflict, rub, staffShort } from "@/lib/derive";
 import { useStore } from "@/lib/store";
 import type { Booking, Visit } from "@/lib/types";
 import { ItemPicker } from "./forms";
@@ -123,6 +123,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
   const I = idx(db);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [extraPhones, setExtraPhones] = useState<string[]>([]); // до 4 дополнительных номеров
   const [brideId, setBrideId] = useState<string>();
   const [item, setItem] = useState<string>();
   const [event, setEvent] = useState("");
@@ -161,7 +162,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         phone: !picked && !phone.trim() ? "Укажите телефон" : dup ? "Этот номер уже в базе — выберите невесту выше" : "",
         item: !item ? "Выберите платье" : conflict ? "Платье занято на эти даты" : "",
         event: !event ? "Укажите дату свадьбы" : pastEvent ? "Дата уже прошла" : "",
-        sum: !Number(sum) ? "Укажите сумму" : "",
+        sum: !Number(sum) ? "Укажите сумму аренды" : "",
         depositNo: takenNo ? "Такой номер уже есть" : "",
       }
     : {
@@ -177,11 +178,14 @@ function EntryForm({ onDone }: { onDone: () => void }) {
   const instant = { phone: !!dup, item: hasMoney && !!conflict, depositNo: !!takenNo, event: pastEvent } as Record<string, boolean>;
   const err = (k: keyof typeof errors) => (tried || instant[k] ? errors[k] : "");
 
+  // при выборе платья подставляется его цена аренды; стоимость платья видна строкой ниже
   const pickItem = (id: string) => {
     setItem(id);
     const x = I.item.get(id);
-    if (x && !sum) setSum(String(x.rentPrice));
+    if (x) setSum(String(x.rentPrice));
   };
+  const pickedItem = item ? I.item.get(item) : undefined;
+  const allPhones = [phone, ...extraPhones].map((p) => p.trim()).filter(Boolean);
 
   const submit = () => {
     setTried(true);
@@ -190,7 +194,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
       // визит без залога: карточка невесты + «Зашли», запись (договор) не создаётся
       const b =
         picked ??
-        saveBride({ name: name.trim() || "Без имени", phones: phone.trim() ? [phone.trim()] : [], eventDate: event || undefined, consultantId: user.id, notes: "" });
+        saveBride({ name: name.trim() || "Без имени", phones: allPhones, eventDate: event || undefined, consultantId: user.id, notes: "" });
       addVisit({ brideId: b.id, date: today(), time: new Date().toTimeString().slice(0, 5), tried: !!item, dressIds: item ? [item] : [], notes: notes.trim(), consultantId: user.id });
       toast("Визит записан — без залога");
       onDone();
@@ -198,7 +202,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
     }
     const bride =
       picked ??
-      saveBride({ name: name.trim(), phones: [phone.trim()], eventDate: event, consultantId: user.id, notes: visited ? "" : "Онлайн-запись без визита в салон" });
+      saveBride({ name: name.trim(), phones: allPhones, eventDate: event, consultantId: user.id, notes: visited ? "" : "Онлайн-запись без визита в салон" });
     if (visited) addVisit({ brideId: bride.id, date: today(), time: new Date().toTimeString().slice(0, 5), tried: true, dressIds: item ? [item] : [], notes: "", consultantId: user.id });
     const transfer = payWay !== "Наличные";
     const k = createBooking(
@@ -242,6 +246,12 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         <span className="ef-field ef-static tabular">{ddmmyyyy(today())}</span>
       </div>
 
+      {/* Дата свадьбы — сразу под датой, чтобы её было видно; по ней проверяется, свободно ли платье */}
+      <Line label="Дата свадьбы" error={err("event")}>
+        <input type="date" value={event} min={today()} onChange={(e) => setEvent(e.target.value)} />
+      </Line>
+      {event && <p className="ef-hint">Выдача {ddmmyyyy(issue)}, возврат {ddmmyyyy(ret)} — администратор может поменять.</p>}
+
       {picked && hist ? (
         <div className="returning-box" role="status">
           <p className="returning-tag">
@@ -270,6 +280,29 @@ function EntryForm({ onDone }: { onDone: () => void }) {
           <Line label="Тел." error={err("phone")}>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="8 9__ ___ __ __" autoComplete="off" />
           </Line>
+          {extraPhones.map((p, i) => (
+            <div key={i} className="ef-line">
+              <span className="ef-label">Доп. тел. {i + 1}</span>
+              <span className="ef-field ef-phone-extra">
+                <input
+                  value={p}
+                  onChange={(e) => setExtraPhones((l) => l.map((x, j) => (j === i ? e.target.value : x)))}
+                  inputMode="tel"
+                  placeholder="мама, сестра, жених…"
+                  aria-label={`Дополнительный телефон ${i + 1}`}
+                  autoComplete="off"
+                />
+                <button type="button" className="icon-btn" aria-label={`Убрать номер ${i + 1}`} onClick={() => setExtraPhones((l) => l.filter((_, j) => j !== i))}>
+                  <Icon name="close" size={18} />
+                </button>
+              </span>
+            </div>
+          ))}
+          {extraPhones.length < 4 && (
+            <button type="button" className="link-btn small ef-add-phone" onClick={() => setExtraPhones((l) => [...l, ""])}>
+              + Ещё номер{extraPhones.length ? ` (можно ещё ${4 - extraPhones.length})` : " — до 4 дополнительных"}
+            </button>
+          )}
           {matches.length > 0 && (
             <div className="matches" role="region" aria-label="Уже были в салоне">
               <p className="matches-title">Уже были в салоне — если это она, нажмите:</p>
@@ -278,7 +311,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
                   const h = brideHistory(db, m.id);
                   return (
                     <li key={m.id}>
-                      <button type="button" className={`match${exactPhone ? " is-exact" : ""}`} onClick={() => setBrideId(m.id)}>
+                      <button type="button" className={`match${exactPhone ? " is-exact" : ""}`} onClick={() => (setBrideId(m.id), !event && m.eventDate && m.eventDate >= today() && setEvent(m.eventDate))}>
                         <span className="match-name">{m.name}</span>
                         <span className="match-meta">
                           {m.phones[0]}
@@ -306,16 +339,9 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         </p>
       )}
 
-      {/* 4. Платье. Дата свадьбы — внутри этой строки: по ней проверяется, свободно ли платье */}
       <div className="ef-line ef-line-block">
         <span className="ef-label">Платье</span>
         <div className="ef-field">
-          <label className={`ef-sub${err("event") ? " has-error" : ""}`}>
-            <span>на свадьбу</span>
-            <input type="date" value={event} min={today()} onChange={(e) => setEvent(e.target.value)} aria-label="Дата свадьбы" />
-          </label>
-          {err("event") && <span className="field-error">{err("event")}</span>}
-          {event && <span className="ef-hint ef-hint-in">Выдача {ddmmyyyy(issue)}, возврат {ddmmyyyy(ret)} — администратор может поменять.</span>}
           <ItemPicker selected={item ? [item] : []} onToggle={pickItem} from={issue || undefined} to={ret || undefined} />
           {err("item") && <span className="field-error">{err("item")}</span>}
         </div>
@@ -327,8 +353,14 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         </p>
       )}
 
-      <Line label="Сумма" error={err("sum")}>
-        <Money value={sum} onChange={setSum} />
+      <div className="ef-line">
+        <span className="ef-label">Стоимость платья</span>
+        <span className="ef-field ef-static tabular">
+          {pickedItem ? (pickedItem.cost ? fmtMoney(pickedItem.cost, pickedItem.costCurrency) : "не указана") : <span className="muted">выберите платье</span>}
+        </span>
+      </div>
+      <Line label="Аренда" error={err("sum")}>
+        <Money value={sum} onChange={setSum} label="Аренда" />
       </Line>
       <Line label="Залог" group>
         <span className="ef-pair">
@@ -349,6 +381,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
       <div className="ef-line ef-line-block">
         <span className="ef-label">Штраф</span>
         <div className="ef-field">
+          <Money value={fine} onChange={setFine} label="Сумма штрафа" placeholder="Сумма, если известна" />
           <textarea
             aria-label="Штраф"
             value={fineWhy}
@@ -356,7 +389,6 @@ function EntryForm({ onDone }: { onDone: () => void }) {
             rows={2}
             placeholder="За что штраф: не вернули вешалку, пятно на подоле…"
           />
-          <Money value={fine} onChange={setFine} label="Сумма штрафа" placeholder="Сумма, если известна" />
         </div>
       </div>
       <Line label="№ договора аренды">

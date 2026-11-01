@@ -90,6 +90,7 @@ export function BookingCard({ b }: { b: Booking }) {
 
   return (
     <article className="paper entry">
+      <WeddingTop date={b.eventDate} big />
       <header className="entry-head">
         <p className="entry-date">{fmtDate(b.createdAt)}</p>
         <Chip tone={overdue ? "bad" : STATUS_TONE[b.status]}>{overdue ? "Просрочен возврат" : STATUS_LABEL[b.status]}</Chip>
@@ -112,10 +113,9 @@ export function BookingCard({ b }: { b: Booking }) {
         <div className="line">
           <dt>Тел</dt>
           <dd className="tabular">
-            {bride?.phones.map((ph, i) => (
-              <a key={ph} href={`tel:${ph.replace(/\D/g, "")}`} className="ink-link">
+            {bride?.phones.map((ph) => (
+              <a key={ph} href={`tel:${ph.replace(/\D/g, "")}`} className="ink-link phone-line">
                 {ph}
-                {i < bride.phones.length - 1 ? ", " : ""}
               </a>
             ))}
           </dd>
@@ -135,7 +135,11 @@ export function BookingCard({ b }: { b: Booking }) {
           </dd>
         </div>
         <div className="line">
-          <dt>Сумма</dt>
+          <dt>Стоимость платья</dt>
+          <dd className="tabular">{item?.cost ? fmtMoney(item.cost, item.costCurrency) : "—"}</dd>
+        </div>
+        <div className="line">
+          <dt>Аренда</dt>
           <dd className="tabular">{rub(b.rentPrice)}</dd>
         </div>
         <div className="line">
@@ -168,13 +172,6 @@ export function BookingCard({ b }: { b: Booking }) {
         <div className="line">
           <dt>Консультант</dt>
           <dd>{cons?.name ?? "—"}</dd>
-        </div>
-        <div className="line">
-          <dt>Свадьба</dt>
-          <dd>
-            {fmtDate(b.eventDate)}
-            {b.eventDate >= today() && <span className="muted"> · {relDay(b.eventDate)}</span>}
-          </dd>
         </div>
         <div className="line">
           <dt>Выдача</dt>
@@ -298,6 +295,18 @@ export function BookingCard({ b }: { b: Booking }) {
 
 const PAY_ORDER: Record<Payment["kind"], number> = { deposit: 0, balance: 1, extra: 2, fine: 3 };
 
+/** Дата свадьбы — первой строкой карточки, крупно */
+function WeddingTop({ date, big }: { date?: string; big?: boolean }) {
+  if (!date) return <span className={`wed-top is-empty${big ? " is-big" : ""}`}>Свадьба: дата не указана</span>;
+  return (
+    <span className={`wed-top${big ? " is-big" : ""}`}>
+      <span className="wed-top-label">Свадьба</span>
+      <span className="wed-top-date">{fmtDate(date)}</span>
+      {date >= today() && <span className="wed-top-rel">{relDay(date)}</span>}
+    </span>
+  );
+}
+
 /* ---------- Карточка в книге записей: половина экрана телефона ---------- */
 
 export function RecordCard({ b }: { b: Booking }) {
@@ -315,7 +324,8 @@ export function RecordCard({ b }: { b: Booking }) {
   const servedBy = b.createdBy !== b.consultantId ? I.staff.get(b.createdBy) : undefined;
   return (
     <button type="button" className="paper record-card" onClick={() => open({ kind: "booking", id: b.id })}>
-      {/* Порядок как в журнале: дата → имя → тел → платье → сумма, залог, доп, штраф → № договоров → комментарий → красные строки */}
+      {/* Сверху — дата свадьбы, крупно. Дальше порядок как в журнале */}
+      <WeddingTop date={b.eventDate} />
       <span className="rc-head">
         <span className="rc-date">{fmtDate(b.createdAt)}</span>
         <Chip tone={overdue ? "bad" : STATUS_TONE[b.status]}>{overdue ? "Просрочен" : STATUS_LABEL[b.status]}</Chip>
@@ -330,19 +340,23 @@ export function RecordCard({ b }: { b: Booking }) {
       <span className="rc-lines">
         <span className="rc-line">
           <i>Тел</i>
-          <b className="tabular">{bride?.phones[0] ?? "—"}</b>
+          <b className="tabular rc-phones">{bride?.phones.length ? bride.phones.join("\n") : "—"}</b>
         </span>
         <span className="rc-line">
           <i>Платье</i>
           <b>
             {item?.model ?? "—"}
-            {item && <span className="muted"> · {item.size} · свадьба {fmtShort(b.eventDate)}</span>}
+            {item && <span className="muted"> · {item.size}</span>}
           </b>
+        </span>
+        <span className="rc-line">
+          <i>Стоимость</i>
+          <b className="tabular">{item?.cost ? fmtMoney(item.cost, item.costCurrency) : "—"}</b>
         </span>
       </span>
       <span className="rc-money">
         <span>
-          <i>Сумма</i>
+          <i>Аренда</i>
           <b>{rub(b.rentPrice)}</b>
         </span>
         <span>
@@ -396,6 +410,7 @@ export function VisitCard({ v }: { v: Visit }) {
   const servedBy = v.servedBy ? I.staff.get(v.servedBy) : undefined;
   return (
     <button type="button" className="paper record-card" onClick={() => open({ kind: "bride", id: v.brideId })}>
+      <WeddingTop date={bride?.eventDate} />
       <span className="rc-head">
         <span className="rc-date">{fmtDate(v.date)}</span>
         <Chip tone="neutral">Без залога</Chip>
@@ -410,7 +425,7 @@ export function VisitCard({ v }: { v: Visit }) {
       <span className="rc-lines">
         <span className="rc-line">
           <i>Тел</i>
-          <b className="tabular">{bride?.phones[0] ?? "—"}</b>
+          <b className="tabular rc-phones">{bride?.phones.length ? bride.phones.join("\n") : "—"}</b>
         </span>
         <span className="rc-line">
           <i>Платье</i>
@@ -419,10 +434,14 @@ export function VisitCard({ v }: { v: Visit }) {
             {models.length === 1 && <span className="muted"> · {models[0].size}</span>}
           </b>
         </span>
+        <span className="rc-line">
+          <i>Стоимость</i>
+          <b className="tabular">{models.length === 1 && models[0].cost ? fmtMoney(models[0].cost, models[0].costCurrency) : "—"}</b>
+        </span>
       </span>
       <span className="rc-money">
         <span>
-          <i>Сумма</i>
+          <i>Аренда</i>
           <b>—</b>
         </span>
         <span>
@@ -465,6 +484,7 @@ function BrideCard({ b }: { b: Bride }) {
 
   return (
     <article className="paper entry">
+      <WeddingTop date={b.eventDate} big />
       <header className="entry-head">
         <h2 className="entry-title">{b.name}</h2>
         {visits.length > 1 && <Chip tone="info">Возвратная · {visits.length} визита</Chip>}
@@ -479,10 +499,6 @@ function BrideCard({ b }: { b: Bride }) {
           <dd>
             {cons?.name ?? "—"} <span className="muted">· встречает при каждом визите</span>
           </dd>
-        </div>
-        <div className="line">
-          <dt>Свадьба</dt>
-          <dd>{b.eventDate ? `${fmtDate(b.eventDate)} · ${relDay(b.eventDate)}` : "—"}</dd>
         </div>
         <div className="line">
           <dt>В базе с</dt>
