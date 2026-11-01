@@ -1212,3 +1212,10 @@ html, body { overflow-x: clip; }
 .ef-add-phone { justify-self: start; padding: 6px 0 8px; }
 .rc-line b.rc-phones { white-space: pre-line; }
 .phone-line { display: block; }
+.ef-phone-extra .ef-who { flex: 0 0 38%; min-width: 0; }
+.ef-phone-extra input { min-width: 0; }
+.ph-line { display: block; }
+.ph-who { color: var(--stone); font-weight: 400; }
+.ph-num { white-space: nowrap; }
+.rc-line b.rc-phones { white-space: normal; }
+.ef-line-block .ef-phone-extra .ef-who { flex: 0 0 40%; }

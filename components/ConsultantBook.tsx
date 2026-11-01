@@ -123,7 +123,8 @@ function EntryForm({ onDone }: { onDone: () => void }) {
   const I = idx(db);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [extraPhones, setExtraPhones] = useState<string[]>([]); // до 4 дополнительных номеров
+  // до 4 дополнительных номеров: чей номер (мама, сестра…) + сам номер; сохраняется как «Мама: 8 9…»
+  const [extraPhones, setExtraPhones] = useState<{ who: string; num: string }[]>([]);
   const [brideId, setBrideId] = useState<string>();
   const [item, setItem] = useState<string>();
   const [event, setEvent] = useState("");
@@ -173,7 +174,8 @@ function EntryForm({ onDone }: { onDone: () => void }) {
         sum: "",
         depositNo: "",
       };
-  const ok = Object.values(errors).every((e) => !e);
+  const whoMissing = extraPhones.some((x) => x.num.trim() && !x.who.trim());
+  const ok = Object.values(errors).every((e) => !e) && !whoMissing;
   // «обязательное поле» — только после попытки отправить; дубль, занятое платье и прошедшая дата — сразу
   const instant = { phone: !!dup, item: hasMoney && !!conflict, depositNo: !!takenNo, event: pastEvent } as Record<string, boolean>;
   const err = (k: keyof typeof errors) => (tried || instant[k] ? errors[k] : "");
@@ -185,7 +187,7 @@ function EntryForm({ onDone }: { onDone: () => void }) {
     if (x) setSum(String(x.rentPrice));
   };
   const pickedItem = item ? I.item.get(item) : undefined;
-  const allPhones = [phone, ...extraPhones].map((p) => p.trim()).filter(Boolean);
+  const allPhones = [phone.trim(), ...extraPhones.filter((x) => x.num.trim()).map((x) => (x.who.trim() ? `${x.who.trim()}: ${x.num.trim()}` : x.num.trim()))].filter(Boolean);
 
   const submit = () => {
     setTried(true);
@@ -281,25 +283,36 @@ function EntryForm({ onDone }: { onDone: () => void }) {
             <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="8 9__ ___ __ __" autoComplete="off" />
           </Line>
           {extraPhones.map((p, i) => (
-            <div key={i} className="ef-line">
+            <div key={i} className={`ef-line ef-line-block${tried && p.num.trim() && !p.who.trim() ? " has-error" : ""}`}>
               <span className="ef-label">Доп. тел. {i + 1}</span>
-              <span className="ef-field ef-phone-extra">
-                <input
-                  value={p}
-                  onChange={(e) => setExtraPhones((l) => l.map((x, j) => (j === i ? e.target.value : x)))}
-                  inputMode="tel"
-                  placeholder="мама, сестра, жених…"
-                  aria-label={`Дополнительный телефон ${i + 1}`}
-                  autoComplete="off"
-                />
-                <button type="button" className="icon-btn" aria-label={`Убрать номер ${i + 1}`} onClick={() => setExtraPhones((l) => l.filter((_, j) => j !== i))}>
-                  <Icon name="close" size={18} />
-                </button>
+              <span className="ef-field">
+                <span className="ef-phone-extra">
+                  <input
+                    className="ef-who"
+                    value={p.who}
+                    onChange={(e) => setExtraPhones((l) => l.map((x, j) => (j === i ? { ...x, who: e.target.value } : x)))}
+                    placeholder="Чей номер"
+                    aria-label={`Чей номер ${i + 1}`}
+                    autoComplete="off"
+                  />
+                  <input
+                    value={p.num}
+                    onChange={(e) => setExtraPhones((l) => l.map((x, j) => (j === i ? { ...x, num: e.target.value } : x)))}
+                    inputMode="tel"
+                    placeholder="8 9__ ___ __ __"
+                    aria-label={`Дополнительный телефон ${i + 1}`}
+                    autoComplete="off"
+                  />
+                  <button type="button" className="icon-btn" aria-label={`Убрать номер ${i + 1}`} onClick={() => setExtraPhones((l) => l.filter((_, j) => j !== i))}>
+                    <Icon name="close" size={18} />
+                  </button>
+                </span>
+                {tried && p.num.trim() && !p.who.trim() && <span className="field-error">Укажите, чей это номер</span>}
               </span>
             </div>
           ))}
           {extraPhones.length < 4 && (
-            <button type="button" className="link-btn small ef-add-phone" onClick={() => setExtraPhones((l) => [...l, ""])}>
+            <button type="button" className="link-btn small ef-add-phone" onClick={() => setExtraPhones((l) => [...l, { who: "", num: "" }])}>
               + Ещё номер{extraPhones.length ? ` (можно ещё ${4 - extraPhones.length})` : " — до 4 дополнительных"}
             </button>
           )}

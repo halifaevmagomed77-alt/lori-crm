@@ -115,7 +115,7 @@ export function BookingCard({ b }: { b: Booking }) {
           <dd className="tabular">
             {bride?.phones.map((ph) => (
               <a key={ph} href={`tel:${ph.replace(/\D/g, "")}`} className="ink-link phone-line">
-                {ph}
+                <PhoneText ph={ph} />
               </a>
             ))}
           </dd>
@@ -295,6 +295,17 @@ export function BookingCard({ b }: { b: Booking }) {
 
 const PAY_ORDER: Record<Payment["kind"], number> = { deposit: 0, balance: 1, extra: 2, fine: 3 };
 
+/** «Мама: 8 962…» → подпись серым, номер не разрывается */
+function PhoneText({ ph }: { ph: string }) {
+  const i = ph.indexOf(":");
+  if (i < 0) return <span className="ph-line"><span className="ph-num">{ph}</span></span>;
+  return (
+    <span className="ph-line">
+      <span className="ph-who">{ph.slice(0, i).trim()}</span> <span className="ph-num">{ph.slice(i + 1).trim()}</span>
+    </span>
+  );
+}
+
 /** Дата свадьбы — первой строкой карточки, крупно */
 function WeddingTop({ date, big }: { date?: string; big?: boolean }) {
   if (!date) return <span className={`wed-top is-empty${big ? " is-big" : ""}`}>Свадьба: дата не указана</span>;
@@ -340,7 +351,7 @@ export function RecordCard({ b }: { b: Booking }) {
       <span className="rc-lines">
         <span className="rc-line">
           <i>Тел</i>
-          <b className="tabular rc-phones">{bride?.phones.length ? bride.phones.join("\n") : "—"}</b>
+          <b className="tabular rc-phones">{bride?.phones.length ? bride.phones.map((ph) => <PhoneText key={ph} ph={ph} />) : "—"}</b>
         </span>
         <span className="rc-line">
           <i>Платье</i>
@@ -425,7 +436,7 @@ export function VisitCard({ v }: { v: Visit }) {
       <span className="rc-lines">
         <span className="rc-line">
           <i>Тел</i>
-          <b className="tabular rc-phones">{bride?.phones.length ? bride.phones.join("\n") : "—"}</b>
+          <b className="tabular rc-phones">{bride?.phones.length ? bride.phones.map((ph) => <PhoneText key={ph} ph={ph} />) : "—"}</b>
         </span>
         <span className="rc-line">
           <i>Платье</i>
