@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { addDays, fmtDay, fmtShort, today, weekday } from "@/lib/dates";
 import { useStore } from "@/lib/store";
-import { MAX_EMPLOYEES, ROLE_LABEL, type Staff } from "@/lib/types";
+import { MAX_EMPLOYEES, ROLE_LABEL, type Attendance, type Staff } from "@/lib/types";
 import { Icon } from "./ui";
 
 /** Режим администратора закрывается сам, если планшет оставили без присмотра */
@@ -26,7 +26,9 @@ function maxOffDate(from: string) {
  * Открывается паролем администратора или владельца.
  */
 export function TabelAdmin({ manager, onClose }: { manager: Staff; onClose: () => void }) {
-  const [tab, setTab] = useState<"off" | "staff">("off");
+  const [tab, setTab] = useState<"off" | "noout" | "staff">("off");
+  const { db } = useStore();
+  const noOutCount = forgotOut(db.attendance, db.staff).length;
 
   // без касаний режим закрывается, чтобы сотрудники не остались в нём сами
   const timer = useRef<number | undefined>(undefined);
@@ -64,12 +66,65 @@ export function TabelAdmin({ manager, onClose }: { manager: Staff; onClose: () =
           <button type="button" role="tab" aria-selected={tab === "off"} onClick={() => setTab("off")}>
             Выходные
           </button>
+          <button type="button" role="tab" aria-selected={tab === "noout"} onClick={() => setTab("noout")}>
+            Не отметили уход{noOutCount ? ` · ${noOutCount}` : ""}
+          </button>
           <button type="button" role="tab" aria-selected={tab === "staff"} onClick={() => setTab("staff")}>
             Сотрудники
           </button>
         </div>
-        {tab === "off" ? <DaysOff manager={manager} /> : <StaffList />}
+        {tab === "off" ? <DaysOff manager={manager} /> : tab === "noout" ? <NoOut /> : <StaffList />}
       </section>
+    </div>
+  );
+}
+
+/* ---------- Не отметили уход за последние 7 дней ---------- */
+
+const NO_OUT_DAYS = 7;
+
+/** Дни, где сотрудница пришла, но не отметила уход (кроме сегодняшнего) */
+function forgotOut(attendance: Attendance[], staff: Staff[]) {
+  const t = today();
+  const from = addDays(t, -NO_OUT_DAYS);
+  return attendance
+    .filter((a) => a.in && !a.out && !a.dayOff && a.date < t && a.date >= from && staff.some((s) => s.id === a.staffId && s.active))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function NoOut() {
+  const { db, setAttendance } = useStore();
+  const list = forgotOut(db.attendance, db.staff);
+  const [times, setTimes] = useState<Record<string, string>>({});
+  const name = (id: string) => db.staff.find((s) => s.id === id)?.name ?? "—";
+  return (
+    <div className="kadm-body">
+      <p className="muted small">Сотрудница пришла, но не нажала «Ушла» — день остаётся открытым и часы не считаются. Поставьте время ухода. Показаны последние {NO_OUT_DAYS} дней.</p>
+      {list.length ? (
+        <ul className="kadm-list">
+          {list.map((a) => {
+            const v = times[a.id] ?? "19:00";
+            const bad = v <= (a.in ?? "");
+            return (
+              <li key={a.id} className="kadm-row">
+                <span className="kadm-name">{name(a.staffId)}</span>
+                <span className="kadm-state">
+                  {fmtShort(a.date)}, {weekday(a.date)} · пришла {a.in}
+                </span>
+                <span className="kadm-out">
+                  <input type="time" value={v} onChange={(e) => setTimes((m) => ({ ...m, [a.id]: e.target.value }))} aria-label={`${name(a.staffId)}: ушла`} />
+                  <button type="button" className="btn" disabled={!v || bad} onClick={() => setAttendance({ staffId: a.staffId, date: a.date, out: v })}>
+                    Поставить уход
+                  </button>
+                </span>
+                {bad && <span className="field-error">Уход раньше прихода</span>}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="muted small">Все отметили уход.</p>
+      )}
     </div>
   );
 }
@@ -144,6 +199,7 @@ function DaysOff({ manager }: { manager: Staff }) {
 }
 
 function DayOffForm({ staff, onCancel, onSave }: { staff: Staff; onCancel: () => void; onSave: (from: string, to: string, note: string) => void }) {
+  const { db } = useStore();
   const t = today();
   const [from, setFrom] = useState(t);
   const [to, setTo] = useState(t);
@@ -195,6 +251,13 @@ function DayOffForm({ staff, onCancel, onSave }: { staff: Staff; onCancel: () =>
         </datalist>
       </label>
       <p className="muted small">Не дальше чем на два месяца вперёд — до {fmtDay(max)}.</p>
+      {db.attendance
+        .filter((a) => a.staffId === staff.id && a.in && a.date >= from && a.date <= to)
+        .map((a) => (
+          <p key={a.id} className="kiosk-effect" role="status">
+            {staff.name} уже отметилась {a.date === t ? "сегодня" : fmtShort(a.date)} в {a.in} — этот день не изменится. Если ей нужно уйти, пусть отметит на планшете «Неполный день».
+          </p>
+        ))}
       {bad && (
         <p className="field-error" role="alert">
           {tooFar ? `Можно поставить выходной только до ${fmtDay(max)}` : "Дата «по» раньше даты «с»"}

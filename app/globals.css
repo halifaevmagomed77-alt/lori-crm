@@ -1183,3 +1183,5 @@ html, body { overflow-x: clip; }
 @media (max-width: 420px) { .kiosk-special { grid-template-columns: 1fr; } }
 .kiosk-sp { min-height: 56px; place-content: center; text-align: center; }
 .kiosk-sp:disabled { background: #f2efeb; color: #b5aea6; border-color: transparent; cursor: default; }
+.kadm-out { display: flex; gap: 8px; align-items: center; }
+.kadm-out input { min-height: 44px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 10px; font-size: 16px; }

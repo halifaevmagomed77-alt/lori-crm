@@ -37,18 +37,29 @@ function statusOf(a?: Attendance): { tone: "none" | "in" | "out" | "off"; text: 
 
 /**
  * Какие кнопки сейчас доступны.
- * «Неполный день» и «Переработка» взаимоисключающие в один день.
+ * - После «Ушла» (или ухода через «Неполный день» / «Переработку») — ничего, правит администратор в CRM.
+ * - «Переработка» — только когда сотрудница на работе, один раз за день.
+ * - «Надевание» и «Фотосессия» — сколько угодно раз, пока не ушла.
+ * - «Неполный день» и «Переработка» взаимоисключающие, «Неполный день» — один раз.
+ * - Выходной от администратора сотрудница сама не перебивает; свой выходной — может (пришла всё-таки).
  */
 function allowed(a: Attendance | undefined) {
   const has = (k: MarkKind) => !!a?.marks?.some((m) => m.kind === k);
+  const adminOff = !!a?.dayOff && !!a.setBy;
+  const selfOff = !!a?.dayOff && !a.setBy;
+  const left = !!a?.out;
+  const working = !!a?.in && !a.out && !a.dayOff;
+  const fresh = !a?.in && !a?.dayOff;
   return {
-    in: !a?.in,
-    out: !!a?.in && !a.out && !a.dayOff,
-    off: !a?.in && !a?.dayOff,
-    dressing: true,
-    photo: true,
-    overtime: !has("partial"),
-    partial: !has("overtime"),
+    in: (fresh || selfOff) && !adminOff,
+    out: working,
+    off: fresh,
+    dressing: !adminOff && !left,
+    photo: !adminOff && !left,
+    overtime: working && !has("overtime") && !has("partial"),
+    partial: (fresh || working) && !has("partial") && !has("overtime"),
+    adminOff,
+    left,
   };
 }
 
@@ -228,6 +239,7 @@ function ActPanel({
   const canIn = ok.in;
   const canOut = ok.out;
   const canOff = ok.off;
+  const setter = useStore().db.staff.find((s) => s.id === a?.setBy);
   return (
     <Panel onClose={onCancel} label={staff.name}>
       <p className="kiosk-panel-name">{staff.name}</p>
@@ -250,6 +262,13 @@ function ActPanel({
         </button>
       </div>
 
+      {ok.adminOff && (
+        <p className="kiosk-effect">
+          Выходной поставила {setter?.name ?? "администратор"}
+          {a?.note ? ` (${a.note.toLowerCase()})` : ""}. Если вы всё-таки вышли на работу — скажите администратору.
+        </p>
+      )}
+
       <p className="kiosk-special-title">Особая отметка</p>
       <div className="kiosk-special">
         {SPECIAL.map((x) => (
@@ -269,7 +288,7 @@ function ActPanel({
           ))}
         </ul>
       )}
-      {a?.in && a.out && <p className="muted small">Если ошиблись со временем — скажите администратору, она поправит.</p>}
+      {ok.left && <p className="muted small">Уход отмечен — на сегодня всё. Если ошиблись со временем — скажите администратору, она поправит.</p>}
       <button type="button" className="btn btn-ghost btn-block kiosk-big" onClick={onCancel}>
         Отмена
       </button>

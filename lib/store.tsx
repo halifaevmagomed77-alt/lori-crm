@@ -265,6 +265,7 @@ function useStoreValue() {
           let attendance = d.attendance;
           for (let day = from; day <= to; day = addDays(day, 1)) {
             const ex = attendance.find((x) => x.staffId === staffId && x.date === day);
+            if (ex?.in) continue; // уже отметилась на работе — день не трогаем, пусть отметит «Неполный день»
             const patch = { dayOff: true, in: undefined, out: undefined, note: note || undefined, setBy: by, marks: undefined };
             attendance = ex ? attendance.map((x) => (x === ex ? { ...ex, ...patch } : x)) : [...attendance, { id: uid("a"), staffId, date: day, ...patch }];
           }
